@@ -44,7 +44,202 @@ function Scan-LastPlayedInstance {
         }
     } catch {}
 
-    # 1. Standard .minecraft (Vanilla, Forge, Fabric, OptiFine, NeoForge)
+    # 1. Modrinth Launcher (Theseus & Modrinth App) - Check first to prioritize modern multi-drive installations
+    $modrinthProfileDirs = [System.Collections.Generic.List[string]]::new()
+    
+    $candidateModrinthDirs = @(
+        (Join-Path $env:APPDATA "com.modrinth.theseus\profiles"),
+        (Join-Path $env:APPDATA "ModrinthApp\profiles"),
+        (Join-Path $env:LOCALAPPDATA "ModrinthApp\profiles"),
+        "D:\Igre\ModrinthApp\profiles",
+        "C:\Igre\ModrinthApp\profiles",
+        "D:\ModrinthApp\profiles",
+        "C:\ModrinthApp\profiles"
+    )
+    foreach ($cmd in $candidateModrinthDirs) {
+        if ((Test-Path $cmd) -and ($cmd -notin $modrinthProfileDirs)) {
+            $modrinthProfileDirs.Add($cmd)
+        }
+    }
+
+    # Discover custom profile locations from Modrinth launcher session logs
+    $modrinthLauncherLogs = Join-Path $env:APPDATA "ModrinthApp\launcher_logs"
+    if (Test-Path $modrinthLauncherLogs) {
+        $recentLogs = Get-ChildItem -Path $modrinthLauncherLogs -Filter "*.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 5
+        foreach ($rl in $recentLogs) {
+            $logLines = Get-Content -Path $rl.FullName -Tail 200 -ErrorAction SilentlyContinue
+            foreach ($lt in $logLines) {
+                if ($lt -match 'path:\s*([A-Za-z]:\\[^"\r\n]+Modrinth[^\\]*\\profiles)') {
+                    $matchedDir = $matches[1].Trim()
+                    if ((Test-Path $matchedDir) -and ($matchedDir -notin $modrinthProfileDirs)) {
+                        $modrinthProfileDirs.Add($matchedDir)
+                    }
+                }
+            }
+        }
+    }
+
+    # Scan all drive roots for ModrinthApp/profiles
+    foreach ($drive in (Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue)) {
+        $driveCandidates = @(
+            (Join-Path $drive.Root "Igre\ModrinthApp\profiles"),
+            (Join-Path $drive.Root "ModrinthApp\profiles"),
+            (Join-Path $drive.Root "Games\ModrinthApp\profiles")
+        )
+        foreach ($dc in $driveCandidates) {
+            if ((Test-Path $dc) -and ($dc -notin $modrinthProfileDirs)) {
+                $modrinthProfileDirs.Add($dc)
+            }
+        }
+    }
+
+    foreach ($mProfilesRoot in $modrinthProfileDirs) {
+        $subDirs = Get-ChildItem -Path $mProfilesRoot -Directory -ErrorAction SilentlyContinue
+        foreach ($mDir in $subDirs) {
+            $mLog = Join-Path $mDir.FullName "logs\latest.log"
+            $mTime = if (Test-Path $mLog) { (Get-Item $mLog).LastWriteTime } else { $mDir.LastWriteTime }
+            $instances.Add([PSCustomObject]@{
+                Launcher   = "Modrinth App"
+                Profile    = $mDir.Name
+                Version    = "Modrinth Profile (Fabric)"
+                Path       = $mDir.FullName
+                LogFile    = if (Test-Path $mLog) { $mLog } else { $null }
+                LastPlayed = $mTime
+            })
+        }
+    }
+
+    # 2. Feather Client
+    $featherPaths = @(
+        (Join-Path $env:APPDATA ".feather"),
+        (Join-Path $env:USERPROFILE ".feather"),
+        (Join-Path $env:LOCALAPPDATA ".feather")
+    )
+    foreach ($fPath in $featherPaths) {
+        if (Test-Path $fPath) {
+            $fLog = Join-Path $fPath "logs\latest.log"
+            $fLastTime = if (Test-Path $fLog) { (Get-Item $fLog).LastWriteTime } else { (Get-Item $fPath).LastWriteTime }
+            $instances.Add([PSCustomObject]@{
+                Launcher   = "Feather Client"
+                Profile    = "Feather Profile"
+                Version    = "Feather Fabric/Forge"
+                Path       = $fPath
+                LogFile    = $fLog
+                LastPlayed = $fLastTime
+            })
+            break
+        }
+    }
+
+    # 3. Lunar Client
+    $lunarPath = Join-Path $env:USERPROFILE ".lunarclient"
+    if (Test-Path $lunarPath) {
+        $lunarLog = Join-Path $lunarPath "offline\multiver\logs\latest.log"
+        if (-not (Test-Path $lunarLog)) { $lunarLog = Join-Path $lunarPath "logs\launcher\renderer.log" }
+        if (-not (Test-Path $lunarLog)) { $lunarLog = Join-Path $lunarPath "logs\launcher\main.log" }
+        $lTime = if (Test-Path $lunarLog) { (Get-Item $lunarLog).LastWriteTime } else { (Get-Item $lunarPath).LastWriteTime }
+        $instances.Add([PSCustomObject]@{
+            Launcher   = "Lunar Client"
+            Profile    = "Lunar MultiVer Profile"
+            Version    = "Lunar Client"
+            Path       = $lunarPath
+            LogFile    = $lunarLog
+            LastPlayed = $lTime
+        })
+    }
+
+    # 4. Badlion Client
+    $badlionPaths = @(
+        (Join-Path $env:APPDATA "Badlion Client"),
+        (Join-Path $env:APPDATA ".minecraft\badlion"),
+        (Join-Path $env:LOCALAPPDATA "Badlion Client")
+    )
+    foreach ($blPath in $badlionPaths) {
+        if (Test-Path $blPath) {
+            $blLog = Join-Path $blPath "logs\latest.log"
+            $blTime = if (Test-Path $blLog) { (Get-Item $blLog).LastWriteTime } else { (Get-Item $blPath).LastWriteTime }
+            $instances.Add([PSCustomObject]@{
+                Launcher   = "Badlion Client"
+                Profile    = "Badlion Profile"
+                Version    = "Badlion Client"
+                Path       = $blPath
+                LogFile    = $blLog
+                LastPlayed = $blTime
+            })
+            break
+        }
+    }
+
+    # 5. CurseForge
+    $cursePaths = @(
+        (Join-Path $env:USERPROFILE "curseforge\minecraft\Instances"),
+        (Join-Path $env:USERPROFILE "Documents\curseforge\minecraft\Instances")
+    )
+    foreach ($cfRoot in $cursePaths) {
+        if (Test-Path $cfRoot) {
+            $cfDirs = Get-ChildItem -Path $cfRoot -Directory -ErrorAction SilentlyContinue
+            foreach ($cfDir in $cfDirs) {
+                $cfLog = Join-Path $cfDir.FullName "logs\latest.log"
+                $cfTime = if (Test-Path $cfLog) { (Get-Item $cfLog).LastWriteTime } else { $cfDir.LastWriteTime }
+                $instances.Add([PSCustomObject]@{
+                    Launcher   = "CurseForge"
+                    Profile    = $cfDir.Name
+                    Version    = "CurseForge Instance"
+                    Path       = $cfDir.FullName
+                    LogFile    = $cfLog
+                    LastPlayed = $cfTime
+                })
+            }
+        }
+    }
+
+    # 6. Prism Launcher & MultiMC
+    $prismPaths = @(
+        (Join-Path $env:APPDATA "PrismLauncher\instances"),
+        (Join-Path $env:APPDATA "MultiMC\instances"),
+        (Join-Path $env:APPDATA "PolyMC\instances")
+    )
+    foreach ($pRoot in $prismPaths) {
+        if (Test-Path $pRoot) {
+            $pDirs = Get-ChildItem -Path $pRoot -Directory -ErrorAction SilentlyContinue
+            foreach ($pDir in $pDirs) {
+                $pLog = Join-Path $pDir.FullName ".minecraft\logs\latest.log"
+                if (-not (Test-Path $pLog)) { $pLog = Join-Path $pDir.FullName "logs\latest.log" }
+                $pTime = if (Test-Path $pLog) { (Get-Item $pLog).LastWriteTime } else { $pDir.LastWriteTime }
+                $instances.Add([PSCustomObject]@{
+                    Launcher   = "Prism / MultiMC"
+                    Profile    = $pDir.Name
+                    Version    = "Prism Instance"
+                    Path       = $pDir.FullName
+                    LogFile    = $pLog
+                    LastPlayed = $pTime
+                })
+            }
+        }
+    }
+
+    # 7. Salwyrr
+    $salwyrrPaths = @(
+        (Join-Path $env:APPDATA ".salwyrr"),
+        (Join-Path $env:USERPROFILE ".salwyrr")
+    )
+    foreach ($sPath in $salwyrrPaths) {
+        if (Test-Path $sPath) {
+            $sLog = Join-Path $sPath "logs\latest.log"
+            $sTime = if (Test-Path $sLog) { (Get-Item $sLog).LastWriteTime } else { (Get-Item $sPath).LastWriteTime }
+            $instances.Add([PSCustomObject]@{
+                Launcher   = "Salwyrr Client"
+                Profile    = "Salwyrr Profile"
+                Version    = "Salwyrr"
+                Path       = $sPath
+                LogFile    = $sLog
+                LastPlayed = $sTime
+            })
+            break
+        }
+    }
+
+    # 8. Standard .minecraft (Vanilla, Forge, Fabric)
     $dotMc = Join-Path $env:APPDATA ".minecraft"
     if (Test-Path $dotMc) {
         $lpJson = Join-Path $dotMc "launcher_profiles.json"
@@ -92,179 +287,7 @@ function Scan-LastPlayedInstance {
         }
     }
 
-    # 2. Feather Client
-    $featherPaths = @(
-        (Join-Path $env:APPDATA ".feather"),
-        (Join-Path $env:USERPROFILE ".feather"),
-        (Join-Path $env:LOCALAPPDATA ".feather")
-    )
-    foreach ($fPath in $featherPaths) {
-        if (Test-Path $fPath) {
-            $fLog = Join-Path $fPath "logs\latest.log"
-            $fLastTime = if (Test-Path $fLog) { (Get-Item $fLog).LastWriteTime } else { (Get-Item $fPath).LastWriteTime }
-            $instances.Add([PSCustomObject]@{
-                Launcher   = "Feather Client"
-                Profile    = "Feather Profile"
-                Version    = "Feather Fabric/Forge"
-                Path       = $fPath
-                LogFile    = $fLog
-                LastPlayed = $fLastTime
-            })
-            break
-        }
-    }
-
-    # 3. Lunar Client
-    $lunarPath = Join-Path $env:USERPROFILE ".lunarclient"
-    if (Test-Path $lunarPath) {
-        $lunarLog = Join-Path $lunarPath "offline\multiver\logs\latest.log"
-        if (-not (Test-Path $lunarLog)) {
-            $lunarLog = Join-Path $lunarPath "logs\launcher\renderer.log"
-        }
-        if (-not (Test-Path $lunarLog)) {
-            $lunarLog = Join-Path $lunarPath "logs\launcher\main.log"
-        }
-        $lTime = if (Test-Path $lunarLog) { (Get-Item $lunarLog).LastWriteTime } else { (Get-Item $lunarPath).LastWriteTime }
-        $instances.Add([PSCustomObject]@{
-            Launcher   = "Lunar Client"
-            Profile    = "Lunar MultiVer Profile"
-            Version    = "Lunar Client"
-            Path       = $lunarPath
-            LogFile    = $lunarLog
-            LastPlayed = $lTime
-        })
-    }
-
-    # 4. Badlion Client
-    $badlionPaths = @(
-        (Join-Path $env:APPDATA "Badlion Client"),
-        (Join-Path $env:APPDATA ".minecraft\badlion"),
-        (Join-Path $env:LOCALAPPDATA "Badlion Client")
-    )
-    foreach ($blPath in $badlionPaths) {
-        if (Test-Path $blPath) {
-            $blLog = Join-Path $blPath "logs\latest.log"
-            $blTime = if (Test-Path $blLog) { (Get-Item $blLog).LastWriteTime } else { (Get-Item $blPath).LastWriteTime }
-            $instances.Add([PSCustomObject]@{
-                Launcher   = "Badlion Client"
-                Profile    = "Badlion Profile"
-                Version    = "Badlion Client"
-                Path       = $blPath
-                LogFile    = $blLog
-                LastPlayed = $blTime
-            })
-            break
-        }
-    }
-
-    # 5. Modrinth Launcher (Theseus)
-    $theseusPath = Join-Path $env:APPDATA "com.modrinth.theseus\profiles"
-    if (Test-Path $theseusPath) {
-        $modrinthDirs = Get-ChildItem -Path $theseusPath -Directory -ErrorAction SilentlyContinue
-        foreach ($mDir in $modrinthDirs) {
-            $mLog = Join-Path $mDir.FullName "logs\latest.log"
-            $mTime = if (Test-Path $mLog) { (Get-Item $mLog).LastWriteTime } else { $mDir.LastWriteTime }
-            $instances.Add([PSCustomObject]@{
-                Launcher   = "Modrinth App (Theseus)"
-                Profile    = $mDir.Name
-                Version    = "Modrinth Profile"
-                Path       = $mDir.FullName
-                LogFile    = $mLog
-                LastPlayed = $mTime
-            })
-        }
-    }
-
-    # 6. CurseForge
-    $cursePaths = @(
-        (Join-Path $env:USERPROFILE "curseforge\minecraft\Instances"),
-        (Join-Path $env:USERPROFILE "Documents\curseforge\minecraft\Instances")
-    )
-    foreach ($cfRoot in $cursePaths) {
-        if (Test-Path $cfRoot) {
-            $cfDirs = Get-ChildItem -Path $cfRoot -Directory -ErrorAction SilentlyContinue
-            foreach ($cfDir in $cfDirs) {
-                $cfLog = Join-Path $cfDir.FullName "logs\latest.log"
-                $cfTime = if (Test-Path $cfLog) { (Get-Item $cfLog).LastWriteTime } else { $cfDir.LastWriteTime }
-                $instances.Add([PSCustomObject]@{
-                    Launcher   = "CurseForge"
-                    Profile    = $cfDir.Name
-                    Version    = "CurseForge Instance"
-                    Path       = $cfDir.FullName
-                    LogFile    = $cfLog
-                    LastPlayed = $cfTime
-                })
-            }
-        }
-    }
-
-    # 7. Prism Launcher & MultiMC
-    $prismPaths = @(
-        (Join-Path $env:APPDATA "PrismLauncher\instances"),
-        (Join-Path $env:APPDATA "MultiMC\instances"),
-        (Join-Path $env:APPDATA "PolyMC\instances")
-    )
-    foreach ($pRoot in $prismPaths) {
-        if (Test-Path $pRoot) {
-            $pDirs = Get-ChildItem -Path $pRoot -Directory -ErrorAction SilentlyContinue
-            foreach ($pDir in $pDirs) {
-                $pLog = Join-Path $pDir.FullName ".minecraft\logs\latest.log"
-                if (-not (Test-Path $pLog)) { $pLog = Join-Path $pDir.FullName "logs\latest.log" }
-                $pTime = if (Test-Path $pLog) { (Get-Item $pLog).LastWriteTime } else { $pDir.LastWriteTime }
-                $instances.Add([PSCustomObject]@{
-                    Launcher   = "Prism / MultiMC"
-                    Profile    = $pDir.Name
-                    Version    = "Prism Instance"
-                    Path       = $pDir.FullName
-                    LogFile    = $pLog
-                    LastPlayed = $pTime
-                })
-            }
-        }
-    }
-
-    # 8. Salwyrr
-    $salwyrrPaths = @(
-        (Join-Path $env:APPDATA ".salwyrr"),
-        (Join-Path $env:USERPROFILE ".salwyrr")
-    )
-    foreach ($sPath in $salwyrrPaths) {
-        if (Test-Path $sPath) {
-            $sLog = Join-Path $sPath "logs\latest.log"
-            $sTime = if (Test-Path $sLog) { (Get-Item $sLog).LastWriteTime } else { (Get-Item $sPath).LastWriteTime }
-            $instances.Add([PSCustomObject]@{
-                Launcher   = "Salwyrr Client"
-                Profile    = "Salwyrr Profile"
-                Version    = "Salwyrr"
-                Path       = $sPath
-                LogFile    = $sLog
-                LastPlayed = $sTime
-            })
-            break
-        }
-    }
-
-    # 9. Prefetch Execution Fallback (if no logs exist on disk)
-    if ($instances.Count -eq 0 -and (Test-Path "C:\Windows\Prefetch")) {
-        try {
-            $pfFiles = Get-ChildItem -Path "C:\Windows\Prefetch" -Filter "*JAVA*.pf" -ErrorAction SilentlyContinue
-            if ($pfFiles) {
-                $latestPf = $pfFiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-                if ($latestPf) {
-                    $instances.Add([PSCustomObject]@{
-                        Launcher   = "Minecraft Java (Prefetch Trace)"
-                        Profile    = "Executed via $($latestPf.Name)"
-                        Version    = "Historical Run"
-                        Path       = "C:\Windows\Prefetch"
-                        LogFile    = $null
-                        LastPlayed = $latestPf.LastWriteTime
-                    })
-                }
-            }
-        } catch {}
-    }
-
-    # Pick the most recently launched instance
+    # Pick the most recently launched instance across all launchers and drives
     $sortedInstances = $instances | Sort-Object LastPlayed -Descending
     $lastPlayed = $sortedInstances | Select-Object -First 1
 
@@ -308,6 +331,16 @@ function Scan-LastPlayedInstance {
 
                 foreach ($line in $logLines) {
                     if ($line -match "Connecting to ([^,\s]+)") {
+                        $server = $matches[1].Trim()
+                        if ($server -notin $connectedServers) {
+                            $connectedServers.Add($server)
+                        }
+                    } elseif ($line -match "(?i)Website:\s*([a-zA-Z0-9\.\-]+)") {
+                        $server = $matches[1].Trim()
+                        if ($server -notin $connectedServers) {
+                            $connectedServers.Add($server)
+                        }
+                    } elseif ($line -match "(?i)\[CHAT\].*(minemen\.club|hypixel\.net|invadedlands\.net|pvptemple\.com|coldpvp\.com|bedless\.club|mcpvp\.club|syuu\.net|loyisa\.cn)") {
                         $server = $matches[1].Trim()
                         if ($server -notin $connectedServers) {
                             $connectedServers.Add($server)

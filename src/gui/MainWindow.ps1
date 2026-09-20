@@ -210,7 +210,7 @@ function Show-GrickoGui {
                     </StackPanel>
                 </StackPanel>
 
-                <!-- VIEW 4: CLEAN DETAILS INSPECTOR (NO SPAM) -->
+                <!-- VIEW 4: CLEAN DETAILS INSPECTOR (NO CODE, NO SPAM) -->
                 <Grid Name="DetailsView" Visibility="Collapsed" Height="350" Margin="4,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -224,22 +224,12 @@ function Show-GrickoGui {
                     </DockPanel>
 
                     <!-- Clean Categorized Details Log -->
-                    <Border Grid.Row="1" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="8">
-                        <ListBox Name="DetailsListBox" Background="Transparent" BorderThickness="0" FontFamily="Consolas, Segoe UI" FontSize="11.5" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                            <ListBox.ItemContainerStyle>
-                                <Style TargetType="ListBoxItem">
-                                    <Setter Property="Padding" Value="3,2"/>
-                                    <Setter Property="Focusable" Value="False"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="ListBoxItem">
-                                                <ContentPresenter />
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </ListBox.ItemContainerStyle>
-                        </ListBox>
+                    <Border Grid.Row="1" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="12">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Name="DetailsContentPanel">
+                                <!-- Populated dynamically with clean human-readable details -->
+                            </StackPanel>
+                        </ScrollViewer>
                     </Border>
 
                     <DockPanel Grid.Row="2" Margin="0,8,0,0">
@@ -303,7 +293,7 @@ function Show-GrickoGui {
     $txtDetectionsBadge= $window.FindName("TxtDetectionsBadge")
     $txtCheatList      = $window.FindName("TxtCheatList")
 
-    $detailsListBox    = $window.FindName("DetailsListBox")
+    $detailsContentPanel = $window.FindName("DetailsContentPanel")
     $txtSummaryStats   = $window.FindName("TxtSummaryStats")
 
     # Set Transparent Logo on Image Controls
@@ -355,45 +345,50 @@ function Show-GrickoGui {
         [System.Windows.Threading.Dispatcher]::PushFrame($frame)
     }
 
-    function Add-CleanDetailLine {
+    function Add-CleanSectionHeader {
+        param([string]$Title)
+        $tb = [System.Windows.Controls.TextBlock]::new()
+        $tb.Text = $Title.ToUpper()
+        $tb.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#818CF8")
+        $tb.FontWeight = [System.Windows.FontWeights]::Bold
+        $tb.FontSize = 11.5
+        $tb.Margin = [System.Windows.Thickness]::new(0, 10, 0, 4)
+        $detailsContentPanel.Children.Add($tb) | Out-Null
+    }
+
+    function Add-CleanRow {
         param(
-            [string]$Category,
-            [string]$Status,
-            [string]$Text,
-            [string]$Color
+            [string]$Label,
+            [string]$Value,
+            [string]$Color = "#E2E8F0"
         )
+        $sp = [System.Windows.Controls.DockPanel]::new()
+        $sp.Margin = [System.Windows.Thickness]::new(4, 2, 0, 2)
 
-        $sp = [System.Windows.Controls.StackPanel]::new()
-        $sp.Orientation = [System.Windows.Controls.Orientation]::Horizontal
-        $sp.Margin = [System.Windows.Thickness]::new(0, 1, 0, 1)
+        $tbLbl = [System.Windows.Controls.TextBlock]::new()
+        $tbLbl.Text = $Label
+        $tbLbl.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#64748B")
+        $tbLbl.FontWeight = [System.Windows.FontWeights]::Bold
+        $tbLbl.Width = 90
+        $tbLbl.FontSize = 11.5
+        [System.Windows.Controls.DockPanel]::SetDock($tbLbl, [System.Windows.Controls.Dock]::Left)
+        $sp.Children.Add($tbLbl) | Out-Null
 
-        $tbCat = [System.Windows.Controls.TextBlock]::new()
-        $tbCat.Text = "[$Category]".PadRight(10)
-        $tbCat.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#64748B")
-        $tbCat.FontWeight = [System.Windows.FontWeights]::Bold
-        $tbCat.Width = 80
-        $sp.Children.Add($tbCat) | Out-Null
+        $tbVal = [System.Windows.Controls.TextBlock]::new()
+        $tbVal.Text = $Value
+        $tbVal.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($Color)
+        $tbVal.TextWrapping = [System.Windows.TextWrapping]::Wrap
+        $tbVal.FontSize = 11.5
+        $sp.Children.Add($tbVal) | Out-Null
 
-        $tbStat = [System.Windows.Controls.TextBlock]::new()
-        $tbStat.Text = "$Status "
-        $tbStat.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($Color)
-        $tbStat.FontWeight = [System.Windows.FontWeights]::Bold
-        $tbStat.Width = 65
-        $sp.Children.Add($tbStat) | Out-Null
-
-        $tbTxt = [System.Windows.Controls.TextBlock]::new()
-        $tbTxt.Text = $Text
-        $tbTxt.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($Color)
-        $sp.Children.Add($tbTxt) | Out-Null
-
-        $detailsListBox.Items.Add($sp) | Out-Null
+        $detailsContentPanel.Children.Add($sp) | Out-Null
     }
 
     # 2-Minute Deep Scan Runner
     $btnScan.Add_Click({
         $homeView.Visibility = [System.Windows.Visibility]::Collapsed
         $progressView.Visibility = [System.Windows.Visibility]::Visible
-        $detailsListBox.Items.Clear()
+        $detailsContentPanel.Children.Clear()
 
         # Reset state
         $Global:ReportData.Scorecard.Flags = 0
@@ -511,44 +506,74 @@ function Show-GrickoGui {
         }
 
         # Filter actual cheat detections (Prestige, Grim, Vape, Drip, Slinky, Raven, etc.)
-        # Exclude normal Essential/Theseus/JNA temp libraries from cheat detections
-        $actualCheats = [System.Collections.Generic.List[string]]::new()
+        $actualCheats = [System.Collections.Generic.List[PSCustomObject]]::new()
         foreach ($f in $Global:Findings) {
             if ($f.Level -eq "FLAG") {
                 $msg = "$($f.Message) $($f.Detail)"
-                if ($msg -notlike "*essential*" -and $msg -notlike "*theseus*" -and $msg -notlike "*imgui*" -and $msg -notlike "*jna*") {
-                    $actualCheats.Add($f.Detail)
+                if ($msg -like "*essential*" -or $msg -like "*theseus*" -or $msg -like "*imgui*" -or $msg -like "*jna*" -or $msg -like "*LOG WAS WIPED*") {
+                    continue
                 }
+
+                $fileName = ""
+                $filePath = ""
+                $actionTime = ""
+
+                if ($f.Detail -match "([^|\r\n]+)\s*\(Executed:\s*([^)]+)\)\s*\|\s*(.*)") {
+                    $fileName = $matches[1].Trim()
+                    $actionTime = $matches[2].Trim()
+                    $filePath = $matches[3].Trim()
+                } elseif ($f.Detail -match "([^|\r\n]+)\s*\(Last Executed:\s*([^)]+)\)") {
+                    $fileName = $matches[1].Trim()
+                    $actionTime = $matches[2].Trim()
+                } elseif ($f.Detail -match "([^(\r\n]+)\s*\(Matches:\s*([^)]+)\)") {
+                    $fileName = $matches[1].Trim()
+                } else {
+                    $fileName = $f.Detail
+                }
+
+                # Clean up filename
+                if ($fileName -match '([^\\]+\.exe)') {
+                    $fileName = $matches[1].Trim()
+                }
+
+                $actualCheats.Add([PSCustomObject]@{
+                    File   = $fileName
+                    Path   = $filePath
+                    Time   = $actionTime
+                    Reason = $f.Message
+                })
             }
         }
 
-        # Build Clean Details List (No Spam)
-        Add-CleanDetailLine "SESSION" "[INFO]" "Last Played Client: $($txtResultClient.Text)" "#38BDF8"
-        Add-CleanDetailLine "SESSION" "[INFO]" "Last Launched Time: $($txtResultTime.Text)" "#E2E8F0"
-        Add-CleanDetailLine "SESSION" "[INFO]" "Last Profile & Version: $($txtResultProfile.Text)" "#94A3B8"
-        if ($txtResultServer.Text -ne "Server   : None") {
-            Add-CleanDetailLine "SESSION" "[INFO]" "Multiplayer Server: $($txtResultServer.Text)" "#38BDF8"
+        # Build Clean Details List (No codes, no bible, just human summary)
+        $detailsContentPanel.Children.Clear()
+
+        Add-CleanSectionHeader "MINECRAFT INSTANCE & SESSION"
+        Add-CleanRow "Client"   $launcherStr "#38BDF8"
+        Add-CleanRow "Profile"  $profileStr "#E2E8F0"
+        Add-CleanRow "Played"   $timeStr "#34D399"
+        if ($txtResultServer.Text -ne "Server   : None" -and $txtResultServer.Text -ne "Server   : N/A") {
+            $srvText = if ($inst -and $inst.ConnectedServers) { $inst.ConnectedServers -join ", " } else { "Singleplayer" }
+            Add-CleanRow "Server"   $srvText "#38BDF8"
         }
 
-        # Process List
-        if ($Global:ReportData.JavaProcesses -and $Global:ReportData.JavaProcesses.Count -gt 0) {
-            foreach ($jp in $Global:ReportData.JavaProcesses) {
-                Add-CleanDetailLine "PROCESS" "[INFO]" "Active Java PID $($jp.ProcessId) ($($jp.Name))" "#34D399"
-                if ($jp.JavaAgents -and $jp.JavaAgents.Count -gt 0) {
-                    foreach ($ja in $jp.JavaAgents) {
-                        Add-CleanDetailLine "AGENT" "[WARN]" "JavaAgent Hook: $ja" "#FBBF24"
-                    }
+        Add-CleanSectionHeader "FLAGGED CHEAT & SUSPICIOUS FILES"
+        if ($actualCheats.Count -gt 0) {
+            $shownFiles = @()
+            foreach ($c in $actualCheats) {
+                if ($c.File -notin $shownFiles) {
+                    $shownFiles += $c.File
+                    Add-CleanRow "File"     $c.File "#EF4444"
+                    if ($c.Path) { Add-CleanRow "Location" $c.Path "#94A3B8" }
+                    if ($c.Time) { Add-CleanRow "Activity" "Executed $c.Time" "#FBBF24" }
                 }
             }
         } else {
-            Add-CleanDetailLine "PROCESS" "[CLEAN]" "No active Minecraft Java processes currently executing." "#10B981"
+            Add-CleanRow "Status" "Clean: No cheat files or blacklisted loaders detected on this PC." "#34D399"
         }
 
-        # Cheats & Suspicious Mods
+        # Main Screen Cheat Badge
         if ($actualCheats.Count -gt 0) {
-            foreach ($c in $actualCheats) {
-                Add-CleanDetailLine "CHEAT" "[FLAG]" "Detected Cheat / Injected Artifact: $c" "#EF4444"
-            }
             $txtResultTitle.Text = "Cheats Detected"
             $txtResultTitle.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
             $txtResultSubtitle.Text = "$($actualCheats.Count) suspicious or cheat client artifacts found"
@@ -557,11 +582,10 @@ function Show-GrickoGui {
             $txtDetectionsBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
             $detectionBox.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#991B1B")
 
-            $uniqueCheats = $actualCheats | Select-Object -Unique
-            $txtCheatList.Text = ($uniqueCheats -join " | ")
+            $uniqueFiles = $actualCheats | ForEach-Object { $_.File } | Select-Object -Unique
+            $txtCheatList.Text = "Flagged: " + ($uniqueFiles -join ", ")
             $txtCheatList.Visibility = [System.Windows.Visibility]::Visible
         } else {
-            Add-CleanDetailLine "SCAN" "[CLEAN]" "Deep PC inspection verified zero ghost clients or cheat loaders." "#10B981"
             $txtResultTitle.Text = "Scan Complete"
             $txtResultTitle.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F8FAFC")
             $txtResultSubtitle.Text = "All deep forensic tests concluded"

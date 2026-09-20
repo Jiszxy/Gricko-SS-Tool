@@ -290,7 +290,202 @@ function Scan-LastPlayedInstance {
         }
     } catch {}
 
-    # 1. Standard .minecraft (Vanilla, Forge, Fabric, OptiFine, NeoForge)
+    # 1. Modrinth Launcher (Theseus & Modrinth App) - Check first to prioritize modern multi-drive installations
+    $modrinthProfileDirs = [System.Collections.Generic.List[string]]::new()
+    
+    $candidateModrinthDirs = @(
+        (Join-Path $env:APPDATA "com.modrinth.theseus\profiles"),
+        (Join-Path $env:APPDATA "ModrinthApp\profiles"),
+        (Join-Path $env:LOCALAPPDATA "ModrinthApp\profiles"),
+        "D:\Igre\ModrinthApp\profiles",
+        "C:\Igre\ModrinthApp\profiles",
+        "D:\ModrinthApp\profiles",
+        "C:\ModrinthApp\profiles"
+    )
+    foreach ($cmd in $candidateModrinthDirs) {
+        if ((Test-Path $cmd) -and ($cmd -notin $modrinthProfileDirs)) {
+            $modrinthProfileDirs.Add($cmd)
+        }
+    }
+
+    # Discover custom profile locations from Modrinth launcher session logs
+    $modrinthLauncherLogs = Join-Path $env:APPDATA "ModrinthApp\launcher_logs"
+    if (Test-Path $modrinthLauncherLogs) {
+        $recentLogs = Get-ChildItem -Path $modrinthLauncherLogs -Filter "*.log" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 5
+        foreach ($rl in $recentLogs) {
+            $logLines = Get-Content -Path $rl.FullName -Tail 200 -ErrorAction SilentlyContinue
+            foreach ($lt in $logLines) {
+                if ($lt -match 'path:\s*([A-Za-z]:\\[^"\r\n]+Modrinth[^\\]*\\profiles)') {
+                    $matchedDir = $matches[1].Trim()
+                    if ((Test-Path $matchedDir) -and ($matchedDir -notin $modrinthProfileDirs)) {
+                        $modrinthProfileDirs.Add($matchedDir)
+                    }
+                }
+            }
+        }
+    }
+
+    # Scan all drive roots for ModrinthApp/profiles
+    foreach ($drive in (Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue)) {
+        $driveCandidates = @(
+            (Join-Path $drive.Root "Igre\ModrinthApp\profiles"),
+            (Join-Path $drive.Root "ModrinthApp\profiles"),
+            (Join-Path $drive.Root "Games\ModrinthApp\profiles")
+        )
+        foreach ($dc in $driveCandidates) {
+            if ((Test-Path $dc) -and ($dc -notin $modrinthProfileDirs)) {
+                $modrinthProfileDirs.Add($dc)
+            }
+        }
+    }
+
+    foreach ($mProfilesRoot in $modrinthProfileDirs) {
+        $subDirs = Get-ChildItem -Path $mProfilesRoot -Directory -ErrorAction SilentlyContinue
+        foreach ($mDir in $subDirs) {
+            $mLog = Join-Path $mDir.FullName "logs\latest.log"
+            $mTime = if (Test-Path $mLog) { (Get-Item $mLog).LastWriteTime } else { $mDir.LastWriteTime }
+            $instances.Add([PSCustomObject]@{
+                Launcher   = "Modrinth App"
+                Profile    = $mDir.Name
+                Version    = "Modrinth Profile (Fabric)"
+                Path       = $mDir.FullName
+                LogFile    = if (Test-Path $mLog) { $mLog } else { $null }
+                LastPlayed = $mTime
+            })
+        }
+    }
+
+    # 2. Feather Client
+    $featherPaths = @(
+        (Join-Path $env:APPDATA ".feather"),
+        (Join-Path $env:USERPROFILE ".feather"),
+        (Join-Path $env:LOCALAPPDATA ".feather")
+    )
+    foreach ($fPath in $featherPaths) {
+        if (Test-Path $fPath) {
+            $fLog = Join-Path $fPath "logs\latest.log"
+            $fLastTime = if (Test-Path $fLog) { (Get-Item $fLog).LastWriteTime } else { (Get-Item $fPath).LastWriteTime }
+            $instances.Add([PSCustomObject]@{
+                Launcher   = "Feather Client"
+                Profile    = "Feather Profile"
+                Version    = "Feather Fabric/Forge"
+                Path       = $fPath
+                LogFile    = $fLog
+                LastPlayed = $fLastTime
+            })
+            break
+        }
+    }
+
+    # 3. Lunar Client
+    $lunarPath = Join-Path $env:USERPROFILE ".lunarclient"
+    if (Test-Path $lunarPath) {
+        $lunarLog = Join-Path $lunarPath "offline\multiver\logs\latest.log"
+        if (-not (Test-Path $lunarLog)) { $lunarLog = Join-Path $lunarPath "logs\launcher\renderer.log" }
+        if (-not (Test-Path $lunarLog)) { $lunarLog = Join-Path $lunarPath "logs\launcher\main.log" }
+        $lTime = if (Test-Path $lunarLog) { (Get-Item $lunarLog).LastWriteTime } else { (Get-Item $lunarPath).LastWriteTime }
+        $instances.Add([PSCustomObject]@{
+            Launcher   = "Lunar Client"
+            Profile    = "Lunar MultiVer Profile"
+            Version    = "Lunar Client"
+            Path       = $lunarPath
+            LogFile    = $lunarLog
+            LastPlayed = $lTime
+        })
+    }
+
+    # 4. Badlion Client
+    $badlionPaths = @(
+        (Join-Path $env:APPDATA "Badlion Client"),
+        (Join-Path $env:APPDATA ".minecraft\badlion"),
+        (Join-Path $env:LOCALAPPDATA "Badlion Client")
+    )
+    foreach ($blPath in $badlionPaths) {
+        if (Test-Path $blPath) {
+            $blLog = Join-Path $blPath "logs\latest.log"
+            $blTime = if (Test-Path $blLog) { (Get-Item $blLog).LastWriteTime } else { (Get-Item $blPath).LastWriteTime }
+            $instances.Add([PSCustomObject]@{
+                Launcher   = "Badlion Client"
+                Profile    = "Badlion Profile"
+                Version    = "Badlion Client"
+                Path       = $blPath
+                LogFile    = $blLog
+                LastPlayed = $blTime
+            })
+            break
+        }
+    }
+
+    # 5. CurseForge
+    $cursePaths = @(
+        (Join-Path $env:USERPROFILE "curseforge\minecraft\Instances"),
+        (Join-Path $env:USERPROFILE "Documents\curseforge\minecraft\Instances")
+    )
+    foreach ($cfRoot in $cursePaths) {
+        if (Test-Path $cfRoot) {
+            $cfDirs = Get-ChildItem -Path $cfRoot -Directory -ErrorAction SilentlyContinue
+            foreach ($cfDir in $cfDirs) {
+                $cfLog = Join-Path $cfDir.FullName "logs\latest.log"
+                $cfTime = if (Test-Path $cfLog) { (Get-Item $cfLog).LastWriteTime } else { $cfDir.LastWriteTime }
+                $instances.Add([PSCustomObject]@{
+                    Launcher   = "CurseForge"
+                    Profile    = $cfDir.Name
+                    Version    = "CurseForge Instance"
+                    Path       = $cfDir.FullName
+                    LogFile    = $cfLog
+                    LastPlayed = $cfTime
+                })
+            }
+        }
+    }
+
+    # 6. Prism Launcher & MultiMC
+    $prismPaths = @(
+        (Join-Path $env:APPDATA "PrismLauncher\instances"),
+        (Join-Path $env:APPDATA "MultiMC\instances"),
+        (Join-Path $env:APPDATA "PolyMC\instances")
+    )
+    foreach ($pRoot in $prismPaths) {
+        if (Test-Path $pRoot) {
+            $pDirs = Get-ChildItem -Path $pRoot -Directory -ErrorAction SilentlyContinue
+            foreach ($pDir in $pDirs) {
+                $pLog = Join-Path $pDir.FullName ".minecraft\logs\latest.log"
+                if (-not (Test-Path $pLog)) { $pLog = Join-Path $pDir.FullName "logs\latest.log" }
+                $pTime = if (Test-Path $pLog) { (Get-Item $pLog).LastWriteTime } else { $pDir.LastWriteTime }
+                $instances.Add([PSCustomObject]@{
+                    Launcher   = "Prism / MultiMC"
+                    Profile    = $pDir.Name
+                    Version    = "Prism Instance"
+                    Path       = $pDir.FullName
+                    LogFile    = $pLog
+                    LastPlayed = $pTime
+                })
+            }
+        }
+    }
+
+    # 7. Salwyrr
+    $salwyrrPaths = @(
+        (Join-Path $env:APPDATA ".salwyrr"),
+        (Join-Path $env:USERPROFILE ".salwyrr")
+    )
+    foreach ($sPath in $salwyrrPaths) {
+        if (Test-Path $sPath) {
+            $sLog = Join-Path $sPath "logs\latest.log"
+            $sTime = if (Test-Path $sLog) { (Get-Item $sLog).LastWriteTime } else { (Get-Item $sPath).LastWriteTime }
+            $instances.Add([PSCustomObject]@{
+                Launcher   = "Salwyrr Client"
+                Profile    = "Salwyrr Profile"
+                Version    = "Salwyrr"
+                Path       = $sPath
+                LogFile    = $sLog
+                LastPlayed = $sTime
+            })
+            break
+        }
+    }
+
+    # 8. Standard .minecraft (Vanilla, Forge, Fabric)
     $dotMc = Join-Path $env:APPDATA ".minecraft"
     if (Test-Path $dotMc) {
         $lpJson = Join-Path $dotMc "launcher_profiles.json"
@@ -338,179 +533,7 @@ function Scan-LastPlayedInstance {
         }
     }
 
-    # 2. Feather Client
-    $featherPaths = @(
-        (Join-Path $env:APPDATA ".feather"),
-        (Join-Path $env:USERPROFILE ".feather"),
-        (Join-Path $env:LOCALAPPDATA ".feather")
-    )
-    foreach ($fPath in $featherPaths) {
-        if (Test-Path $fPath) {
-            $fLog = Join-Path $fPath "logs\latest.log"
-            $fLastTime = if (Test-Path $fLog) { (Get-Item $fLog).LastWriteTime } else { (Get-Item $fPath).LastWriteTime }
-            $instances.Add([PSCustomObject]@{
-                Launcher   = "Feather Client"
-                Profile    = "Feather Profile"
-                Version    = "Feather Fabric/Forge"
-                Path       = $fPath
-                LogFile    = $fLog
-                LastPlayed = $fLastTime
-            })
-            break
-        }
-    }
-
-    # 3. Lunar Client
-    $lunarPath = Join-Path $env:USERPROFILE ".lunarclient"
-    if (Test-Path $lunarPath) {
-        $lunarLog = Join-Path $lunarPath "offline\multiver\logs\latest.log"
-        if (-not (Test-Path $lunarLog)) {
-            $lunarLog = Join-Path $lunarPath "logs\launcher\renderer.log"
-        }
-        if (-not (Test-Path $lunarLog)) {
-            $lunarLog = Join-Path $lunarPath "logs\launcher\main.log"
-        }
-        $lTime = if (Test-Path $lunarLog) { (Get-Item $lunarLog).LastWriteTime } else { (Get-Item $lunarPath).LastWriteTime }
-        $instances.Add([PSCustomObject]@{
-            Launcher   = "Lunar Client"
-            Profile    = "Lunar MultiVer Profile"
-            Version    = "Lunar Client"
-            Path       = $lunarPath
-            LogFile    = $lunarLog
-            LastPlayed = $lTime
-        })
-    }
-
-    # 4. Badlion Client
-    $badlionPaths = @(
-        (Join-Path $env:APPDATA "Badlion Client"),
-        (Join-Path $env:APPDATA ".minecraft\badlion"),
-        (Join-Path $env:LOCALAPPDATA "Badlion Client")
-    )
-    foreach ($blPath in $badlionPaths) {
-        if (Test-Path $blPath) {
-            $blLog = Join-Path $blPath "logs\latest.log"
-            $blTime = if (Test-Path $blLog) { (Get-Item $blLog).LastWriteTime } else { (Get-Item $blPath).LastWriteTime }
-            $instances.Add([PSCustomObject]@{
-                Launcher   = "Badlion Client"
-                Profile    = "Badlion Profile"
-                Version    = "Badlion Client"
-                Path       = $blPath
-                LogFile    = $blLog
-                LastPlayed = $blTime
-            })
-            break
-        }
-    }
-
-    # 5. Modrinth Launcher (Theseus)
-    $theseusPath = Join-Path $env:APPDATA "com.modrinth.theseus\profiles"
-    if (Test-Path $theseusPath) {
-        $modrinthDirs = Get-ChildItem -Path $theseusPath -Directory -ErrorAction SilentlyContinue
-        foreach ($mDir in $modrinthDirs) {
-            $mLog = Join-Path $mDir.FullName "logs\latest.log"
-            $mTime = if (Test-Path $mLog) { (Get-Item $mLog).LastWriteTime } else { $mDir.LastWriteTime }
-            $instances.Add([PSCustomObject]@{
-                Launcher   = "Modrinth App (Theseus)"
-                Profile    = $mDir.Name
-                Version    = "Modrinth Profile"
-                Path       = $mDir.FullName
-                LogFile    = $mLog
-                LastPlayed = $mTime
-            })
-        }
-    }
-
-    # 6. CurseForge
-    $cursePaths = @(
-        (Join-Path $env:USERPROFILE "curseforge\minecraft\Instances"),
-        (Join-Path $env:USERPROFILE "Documents\curseforge\minecraft\Instances")
-    )
-    foreach ($cfRoot in $cursePaths) {
-        if (Test-Path $cfRoot) {
-            $cfDirs = Get-ChildItem -Path $cfRoot -Directory -ErrorAction SilentlyContinue
-            foreach ($cfDir in $cfDirs) {
-                $cfLog = Join-Path $cfDir.FullName "logs\latest.log"
-                $cfTime = if (Test-Path $cfLog) { (Get-Item $cfLog).LastWriteTime } else { $cfDir.LastWriteTime }
-                $instances.Add([PSCustomObject]@{
-                    Launcher   = "CurseForge"
-                    Profile    = $cfDir.Name
-                    Version    = "CurseForge Instance"
-                    Path       = $cfDir.FullName
-                    LogFile    = $cfLog
-                    LastPlayed = $cfTime
-                })
-            }
-        }
-    }
-
-    # 7. Prism Launcher & MultiMC
-    $prismPaths = @(
-        (Join-Path $env:APPDATA "PrismLauncher\instances"),
-        (Join-Path $env:APPDATA "MultiMC\instances"),
-        (Join-Path $env:APPDATA "PolyMC\instances")
-    )
-    foreach ($pRoot in $prismPaths) {
-        if (Test-Path $pRoot) {
-            $pDirs = Get-ChildItem -Path $pRoot -Directory -ErrorAction SilentlyContinue
-            foreach ($pDir in $pDirs) {
-                $pLog = Join-Path $pDir.FullName ".minecraft\logs\latest.log"
-                if (-not (Test-Path $pLog)) { $pLog = Join-Path $pDir.FullName "logs\latest.log" }
-                $pTime = if (Test-Path $pLog) { (Get-Item $pLog).LastWriteTime } else { $pDir.LastWriteTime }
-                $instances.Add([PSCustomObject]@{
-                    Launcher   = "Prism / MultiMC"
-                    Profile    = $pDir.Name
-                    Version    = "Prism Instance"
-                    Path       = $pDir.FullName
-                    LogFile    = $pLog
-                    LastPlayed = $pTime
-                })
-            }
-        }
-    }
-
-    # 8. Salwyrr
-    $salwyrrPaths = @(
-        (Join-Path $env:APPDATA ".salwyrr"),
-        (Join-Path $env:USERPROFILE ".salwyrr")
-    )
-    foreach ($sPath in $salwyrrPaths) {
-        if (Test-Path $sPath) {
-            $sLog = Join-Path $sPath "logs\latest.log"
-            $sTime = if (Test-Path $sLog) { (Get-Item $sLog).LastWriteTime } else { (Get-Item $sPath).LastWriteTime }
-            $instances.Add([PSCustomObject]@{
-                Launcher   = "Salwyrr Client"
-                Profile    = "Salwyrr Profile"
-                Version    = "Salwyrr"
-                Path       = $sPath
-                LogFile    = $sLog
-                LastPlayed = $sTime
-            })
-            break
-        }
-    }
-
-    # 9. Prefetch Execution Fallback (if no logs exist on disk)
-    if ($instances.Count -eq 0 -and (Test-Path "C:\Windows\Prefetch")) {
-        try {
-            $pfFiles = Get-ChildItem -Path "C:\Windows\Prefetch" -Filter "*JAVA*.pf" -ErrorAction SilentlyContinue
-            if ($pfFiles) {
-                $latestPf = $pfFiles | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-                if ($latestPf) {
-                    $instances.Add([PSCustomObject]@{
-                        Launcher   = "Minecraft Java (Prefetch Trace)"
-                        Profile    = "Executed via $($latestPf.Name)"
-                        Version    = "Historical Run"
-                        Path       = "C:\Windows\Prefetch"
-                        LogFile    = $null
-                        LastPlayed = $latestPf.LastWriteTime
-                    })
-                }
-            }
-        } catch {}
-    }
-
-    # Pick the most recently launched instance
+    # Pick the most recently launched instance across all launchers and drives
     $sortedInstances = $instances | Sort-Object LastPlayed -Descending
     $lastPlayed = $sortedInstances | Select-Object -First 1
 
@@ -554,6 +577,16 @@ function Scan-LastPlayedInstance {
 
                 foreach ($line in $logLines) {
                     if ($line -match "Connecting to ([^,\s]+)") {
+                        $server = $matches[1].Trim()
+                        if ($server -notin $connectedServers) {
+                            $connectedServers.Add($server)
+                        }
+                    } elseif ($line -match "(?i)Website:\s*([a-zA-Z0-9\.\-]+)") {
+                        $server = $matches[1].Trim()
+                        if ($server -notin $connectedServers) {
+                            $connectedServers.Add($server)
+                        }
+                    } elseif ($line -match "(?i)\[CHAT\].*(minemen\.club|hypixel\.net|invadedlands\.net|pvptemple\.com|coldpvp\.com|bedless\.club|mcpvp\.club|syuu\.net|loyisa\.cn)") {
                         $server = $matches[1].Trim()
                         if ($server -notin $connectedServers) {
                             $connectedServers.Add($server)
@@ -1483,7 +1516,7 @@ function Show-GrickoGui {
                     </StackPanel>
                 </StackPanel>
 
-                <!-- VIEW 4: CLEAN DETAILS INSPECTOR (NO SPAM) -->
+                <!-- VIEW 4: CLEAN DETAILS INSPECTOR (NO CODE, NO SPAM) -->
                 <Grid Name="DetailsView" Visibility="Collapsed" Height="350" Margin="4,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -1497,22 +1530,12 @@ function Show-GrickoGui {
                     </DockPanel>
 
                     <!-- Clean Categorized Details Log -->
-                    <Border Grid.Row="1" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="8">
-                        <ListBox Name="DetailsListBox" Background="Transparent" BorderThickness="0" FontFamily="Consolas, Segoe UI" FontSize="11.5" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                            <ListBox.ItemContainerStyle>
-                                <Style TargetType="ListBoxItem">
-                                    <Setter Property="Padding" Value="3,2"/>
-                                    <Setter Property="Focusable" Value="False"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="ListBoxItem">
-                                                <ContentPresenter />
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </ListBox.ItemContainerStyle>
-                        </ListBox>
+                    <Border Grid.Row="1" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="12">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Name="DetailsContentPanel">
+                                <!-- Populated dynamically with clean human-readable details -->
+                            </StackPanel>
+                        </ScrollViewer>
                     </Border>
 
                     <DockPanel Grid.Row="2" Margin="0,8,0,0">
@@ -1576,7 +1599,7 @@ function Show-GrickoGui {
     $txtDetectionsBadge= $window.FindName("TxtDetectionsBadge")
     $txtCheatList      = $window.FindName("TxtCheatList")
 
-    $detailsListBox    = $window.FindName("DetailsListBox")
+    $detailsContentPanel = $window.FindName("DetailsContentPanel")
     $txtSummaryStats   = $window.FindName("TxtSummaryStats")
 
     # Set Transparent Logo on Image Controls
@@ -1628,45 +1651,50 @@ function Show-GrickoGui {
         [System.Windows.Threading.Dispatcher]::PushFrame($frame)
     }
 
-    function Add-CleanDetailLine {
+    function Add-CleanSectionHeader {
+        param([string]$Title)
+        $tb = [System.Windows.Controls.TextBlock]::new()
+        $tb.Text = $Title.ToUpper()
+        $tb.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#818CF8")
+        $tb.FontWeight = [System.Windows.FontWeights]::Bold
+        $tb.FontSize = 11.5
+        $tb.Margin = [System.Windows.Thickness]::new(0, 10, 0, 4)
+        $detailsContentPanel.Children.Add($tb) | Out-Null
+    }
+
+    function Add-CleanRow {
         param(
-            [string]$Category,
-            [string]$Status,
-            [string]$Text,
-            [string]$Color
+            [string]$Label,
+            [string]$Value,
+            [string]$Color = "#E2E8F0"
         )
+        $sp = [System.Windows.Controls.DockPanel]::new()
+        $sp.Margin = [System.Windows.Thickness]::new(4, 2, 0, 2)
 
-        $sp = [System.Windows.Controls.StackPanel]::new()
-        $sp.Orientation = [System.Windows.Controls.Orientation]::Horizontal
-        $sp.Margin = [System.Windows.Thickness]::new(0, 1, 0, 1)
+        $tbLbl = [System.Windows.Controls.TextBlock]::new()
+        $tbLbl.Text = $Label
+        $tbLbl.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#64748B")
+        $tbLbl.FontWeight = [System.Windows.FontWeights]::Bold
+        $tbLbl.Width = 90
+        $tbLbl.FontSize = 11.5
+        [System.Windows.Controls.DockPanel]::SetDock($tbLbl, [System.Windows.Controls.Dock]::Left)
+        $sp.Children.Add($tbLbl) | Out-Null
 
-        $tbCat = [System.Windows.Controls.TextBlock]::new()
-        $tbCat.Text = "[$Category]".PadRight(10)
-        $tbCat.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#64748B")
-        $tbCat.FontWeight = [System.Windows.FontWeights]::Bold
-        $tbCat.Width = 80
-        $sp.Children.Add($tbCat) | Out-Null
+        $tbVal = [System.Windows.Controls.TextBlock]::new()
+        $tbVal.Text = $Value
+        $tbVal.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($Color)
+        $tbVal.TextWrapping = [System.Windows.TextWrapping]::Wrap
+        $tbVal.FontSize = 11.5
+        $sp.Children.Add($tbVal) | Out-Null
 
-        $tbStat = [System.Windows.Controls.TextBlock]::new()
-        $tbStat.Text = "$Status "
-        $tbStat.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($Color)
-        $tbStat.FontWeight = [System.Windows.FontWeights]::Bold
-        $tbStat.Width = 65
-        $sp.Children.Add($tbStat) | Out-Null
-
-        $tbTxt = [System.Windows.Controls.TextBlock]::new()
-        $tbTxt.Text = $Text
-        $tbTxt.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($Color)
-        $sp.Children.Add($tbTxt) | Out-Null
-
-        $detailsListBox.Items.Add($sp) | Out-Null
+        $detailsContentPanel.Children.Add($sp) | Out-Null
     }
 
     # 2-Minute Deep Scan Runner
     $btnScan.Add_Click({
         $homeView.Visibility = [System.Windows.Visibility]::Collapsed
         $progressView.Visibility = [System.Windows.Visibility]::Visible
-        $detailsListBox.Items.Clear()
+        $detailsContentPanel.Children.Clear()
 
         # Reset state
         $Global:ReportData.Scorecard.Flags = 0
@@ -1784,44 +1812,74 @@ function Show-GrickoGui {
         }
 
         # Filter actual cheat detections (Prestige, Grim, Vape, Drip, Slinky, Raven, etc.)
-        # Exclude normal Essential/Theseus/JNA temp libraries from cheat detections
-        $actualCheats = [System.Collections.Generic.List[string]]::new()
+        $actualCheats = [System.Collections.Generic.List[PSCustomObject]]::new()
         foreach ($f in $Global:Findings) {
             if ($f.Level -eq "FLAG") {
                 $msg = "$($f.Message) $($f.Detail)"
-                if ($msg -notlike "*essential*" -and $msg -notlike "*theseus*" -and $msg -notlike "*imgui*" -and $msg -notlike "*jna*") {
-                    $actualCheats.Add($f.Detail)
+                if ($msg -like "*essential*" -or $msg -like "*theseus*" -or $msg -like "*imgui*" -or $msg -like "*jna*" -or $msg -like "*LOG WAS WIPED*") {
+                    continue
                 }
+
+                $fileName = ""
+                $filePath = ""
+                $actionTime = ""
+
+                if ($f.Detail -match "([^|\r\n]+)\s*\(Executed:\s*([^)]+)\)\s*\|\s*(.*)") {
+                    $fileName = $matches[1].Trim()
+                    $actionTime = $matches[2].Trim()
+                    $filePath = $matches[3].Trim()
+                } elseif ($f.Detail -match "([^|\r\n]+)\s*\(Last Executed:\s*([^)]+)\)") {
+                    $fileName = $matches[1].Trim()
+                    $actionTime = $matches[2].Trim()
+                } elseif ($f.Detail -match "([^(\r\n]+)\s*\(Matches:\s*([^)]+)\)") {
+                    $fileName = $matches[1].Trim()
+                } else {
+                    $fileName = $f.Detail
+                }
+
+                # Clean up filename
+                if ($fileName -match '([^\\]+\.exe)') {
+                    $fileName = $matches[1].Trim()
+                }
+
+                $actualCheats.Add([PSCustomObject]@{
+                    File   = $fileName
+                    Path   = $filePath
+                    Time   = $actionTime
+                    Reason = $f.Message
+                })
             }
         }
 
-        # Build Clean Details List (No Spam)
-        Add-CleanDetailLine "SESSION" "[INFO]" "Last Played Client: $($txtResultClient.Text)" "#38BDF8"
-        Add-CleanDetailLine "SESSION" "[INFO]" "Last Launched Time: $($txtResultTime.Text)" "#E2E8F0"
-        Add-CleanDetailLine "SESSION" "[INFO]" "Last Profile & Version: $($txtResultProfile.Text)" "#94A3B8"
-        if ($txtResultServer.Text -ne "Server   : None") {
-            Add-CleanDetailLine "SESSION" "[INFO]" "Multiplayer Server: $($txtResultServer.Text)" "#38BDF8"
+        # Build Clean Details List (No codes, no bible, just human summary)
+        $detailsContentPanel.Children.Clear()
+
+        Add-CleanSectionHeader "MINECRAFT INSTANCE & SESSION"
+        Add-CleanRow "Client"   $launcherStr "#38BDF8"
+        Add-CleanRow "Profile"  $profileStr "#E2E8F0"
+        Add-CleanRow "Played"   $timeStr "#34D399"
+        if ($txtResultServer.Text -ne "Server   : None" -and $txtResultServer.Text -ne "Server   : N/A") {
+            $srvText = if ($inst -and $inst.ConnectedServers) { $inst.ConnectedServers -join ", " } else { "Singleplayer" }
+            Add-CleanRow "Server"   $srvText "#38BDF8"
         }
 
-        # Process List
-        if ($Global:ReportData.JavaProcesses -and $Global:ReportData.JavaProcesses.Count -gt 0) {
-            foreach ($jp in $Global:ReportData.JavaProcesses) {
-                Add-CleanDetailLine "PROCESS" "[INFO]" "Active Java PID $($jp.ProcessId) ($($jp.Name))" "#34D399"
-                if ($jp.JavaAgents -and $jp.JavaAgents.Count -gt 0) {
-                    foreach ($ja in $jp.JavaAgents) {
-                        Add-CleanDetailLine "AGENT" "[WARN]" "JavaAgent Hook: $ja" "#FBBF24"
-                    }
+        Add-CleanSectionHeader "FLAGGED CHEAT & SUSPICIOUS FILES"
+        if ($actualCheats.Count -gt 0) {
+            $shownFiles = @()
+            foreach ($c in $actualCheats) {
+                if ($c.File -notin $shownFiles) {
+                    $shownFiles += $c.File
+                    Add-CleanRow "File"     $c.File "#EF4444"
+                    if ($c.Path) { Add-CleanRow "Location" $c.Path "#94A3B8" }
+                    if ($c.Time) { Add-CleanRow "Activity" "Executed $c.Time" "#FBBF24" }
                 }
             }
         } else {
-            Add-CleanDetailLine "PROCESS" "[CLEAN]" "No active Minecraft Java processes currently executing." "#10B981"
+            Add-CleanRow "Status" "Clean: No cheat files or blacklisted loaders detected on this PC." "#34D399"
         }
 
-        # Cheats & Suspicious Mods
+        # Main Screen Cheat Badge
         if ($actualCheats.Count -gt 0) {
-            foreach ($c in $actualCheats) {
-                Add-CleanDetailLine "CHEAT" "[FLAG]" "Detected Cheat / Injected Artifact: $c" "#EF4444"
-            }
             $txtResultTitle.Text = "Cheats Detected"
             $txtResultTitle.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
             $txtResultSubtitle.Text = "$($actualCheats.Count) suspicious or cheat client artifacts found"
@@ -1830,11 +1888,10 @@ function Show-GrickoGui {
             $txtDetectionsBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
             $detectionBox.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#991B1B")
 
-            $uniqueCheats = $actualCheats | Select-Object -Unique
-            $txtCheatList.Text = ($uniqueCheats -join " | ")
+            $uniqueFiles = $actualCheats | ForEach-Object { $_.File } | Select-Object -Unique
+            $txtCheatList.Text = "Flagged: " + ($uniqueFiles -join ", ")
             $txtCheatList.Visibility = [System.Windows.Visibility]::Visible
         } else {
-            Add-CleanDetailLine "SCAN" "[CLEAN]" "Deep PC inspection verified zero ghost clients or cheat loaders." "#10B981"
             $txtResultTitle.Text = "Scan Complete"
             $txtResultTitle.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F8FAFC")
             $txtResultSubtitle.Text = "All deep forensic tests concluded"
