@@ -77,11 +77,10 @@ $Global:CheatSignatures = @(
     "aimhelper", "rotationhelper", "snapaim", "silentaim", "predictiveaim",
     "targetstrafe", "aimstrafe",
 
-    # Crystal PvP Automation
-    "crystal.*optimizer", "crystaloptimizer", "marlow.*crystal",
+    # Crystal PvP Automation (Macros & Cheats - legitimate optimizers like Marlow/Kind are excluded)
     "crystalaura", "crystal-aura", "autocrystal", "auto-crystal",
-    "anchor.*optimizer", "anchoroptimizer", "herosanchor",
-    "autocristal", "fastcrystal", "crystalbot",
+    "autocristal", "fastcrystal", "crystalbot", "autoanchor", "auto-anchor",
+    "anchormacro", "anchor-macro", "doubleanchor", "double-anchor", "anchorbot",
 
     # Velocity / Anti-Knockback
     "velocityhack", "velocity-hack", "antivelocity", "novelocity",
@@ -95,10 +94,20 @@ $Global:CheatSignatures = @(
 
     # Classic Disallowed Mods
     "hitbox", "reach", "extendedreach", "reachmod",
-    "fastplace", "autototem", "autoanchor", "autopot", "autoshield",
-    "freecam", "freelook", "xray", "x-ray", "baritone", "seedcracker",
+    "fastplace", "autototem", "autopot", "autoshield",
+    "freecam", "xray", "x-ray", "baritone", "seedcracker",
     "nofall", "nofall.*mod", "antifall", "killaura", "killa.aura",
     "scaffoldmod", "towerbotmod", "speedmod", "flightmod"
+)
+
+# Known Legitimate Public Modrinth / CurseForge Mods (Optimizers, Camera, Performance)
+$Global:LegitimateModSignatures = @(
+    "kindscrystaloptimizer", "kinds_anchor_optimizer", "kinds-anchor-optimizer",
+    "marlowcrystal", "marlow-crystal-optimizer", "herosanchoroptimizer",
+    "clientsidecrystals", "freelook", "cpvpoptimizer", "jiszxycpvpoptimizer",
+    "sodium", "lithium", "ferritecore", "iris", "entityculling", "immediatelyfast",
+    "krypton", "modmenu", "fabric-api", "clumps", "shieldfixes", "crosshairaddons",
+    "c2me", "bobby", "appleskin", "cloth-config", "yet-another-config-lib"
 )
 
 # Known Legitimate Launchers & Mod Loaders

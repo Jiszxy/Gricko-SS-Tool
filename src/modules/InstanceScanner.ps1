@@ -99,16 +99,17 @@ function Analyze-InstanceMods {
     }
 
     # Pre-compiled high-performance regexes for instant multi-pattern evaluation
-    $cheatPkgs = @("wurstclient","meteordevelopment","vape","crystaloptimizer",
-                   "anchoroptimizer","autoclicker","raven/b","liquidbounce",
+    $cheatPkgs = @("wurstclient","meteordevelopment","vape",
+                   "autoclicker","raven/b","liquidbounce",
                    "rusherhack","tenacity","novoline","rise/client","futureclient",
                    "astolfo","sigma/client","salware","drip/loader","weavemc",
                    "weave/loader","bape/client","lowkey/client","itami/client",
                    "dreamclient","entropy/client","spectral/client","pluto/client",
                    "us/kenny","us/kenny/mace","us/kenny/triggerbot","us/kenny/web",
-                   "maceassist","mace/assist","cpvp/client","cpvpclient",
-                   "lungemacro","lunge/macro","windchargeassist","windcharge/assist",
-                   "crystalaura","crystal/aura","autocrystal","auto/crystal")
+                   "maceassist","mace/assist","lungemacro","lunge/macro",
+                   "windchargeassist","windcharge/assist",
+                   "crystalaura","crystal/aura","autocrystal","auto/crystal",
+                   "anchormacro","anchor/macro","doubleanchor","double/anchor")
     $cheatPkgRegex = [regex]::new('(?i)(' + (($cheatPkgs | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')', [System.Text.RegularExpressions.RegexOptions]::Compiled)
 
     $suspPats = @(
@@ -130,15 +131,15 @@ function Analyze-InstanceMods {
         "PlayerEspManager","playerEspManager","StreamProofOverlayManager",
         "WebConfigServer","webConfigServer","explodeMod","ExplodeMod",
         "WindChargeAssist","windChargeAssist","maceSwing","autoMace","AutoMace",
-        "fallVelocityCheck","minFallDistance","aimAssistEnabled","cpvpModule",
+        "fallVelocityCheck","minFallDistance","aimAssistEnabled",
         "smartCrit","smartCrits","shieldBypass","ShieldBypass","autoAxeSwap",
-        "CrystalAura","crystalAura","AutoCrystal","autoCrystal","placeDelay",
-        "breakDelay","clickSimulation","autoGlowstone","autoRefillInventory",
+        "CrystalAura","crystalAura","AutoCrystal","autoCrystal",
+        "AnchorMacro","anchorMacro","DoubleAnchor","doubleAnchor",
         "Allatori","Obfuscated by","Stringer","Zelix","DashO","JBCO","SkidFuscator"
     )
     $suspRegex = [regex]::new('(?i)\b(' + (($suspPats | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')\b', [System.Text.RegularExpressions.RegexOptions]::Compiled)
     $dangerRegex = [regex]::new('(?i)(java/lang/instrument/|sun/misc/Unsafe|java/lang/reflect/Proxy|com/sun/tools/attach/)', [System.Text.RegularExpressions.RegexOptions]::Compiled)
-    $heurRegex = [regex]::new('(?i)\b(killaura|aimbot|triggerbot|reach|velocitymultiplier|antivelocity|novelocity|esp|wallhack|xray|bhop|fly|freecam|nofall|autoeat|scaffold|phase|step|jesus|wurst|meteor|vape|bleachhack|future|sigma|rusherhack|liquidbounce|autoclicker|crystaloptimizer|hack|cheat)\b', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+    $heurRegex = [regex]::new('(?i)\b(killaura|aimbot|triggerbot|reach|velocitymultiplier|antivelocity|novelocity|esp|wallhack|xray|bhop|fly|freecam|nofall|autoeat|scaffold|phase|step|jesus|wurst|meteor|vape|bleachhack|future|sigma|rusherhack|liquidbounce|autoclicker|hack|cheat)\b', [System.Text.RegularExpressions.RegexOptions]::Compiled)
     $mixinHeurRegex = [regex]::new('(?i)(killaura|aimbot|autoclicker|reach|velocitymultiplier|antivelocity|esp|cheat|hack|antiac)', [System.Text.RegularExpressions.RegexOptions]::Compiled)
 
     # AI Helper: Shannon entropy (randomness measure for obfuscation detection)
@@ -186,10 +187,19 @@ function Analyze-InstanceMods {
         $displayName  = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
 
         # -- LAYER 1: Filename signature matching ------------------------------
-        foreach ($sig in $Global:CheatSignatures) {
-            if ($mod.Name -match "(?i)$sig") {
-                $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
-                $reason = "Filename matches known cheat signature: $sig"; $aiRisk = 100; break
+        $isKnownLegit = $false
+        if ($Global:LegitimateModSignatures) {
+            foreach ($ls in $Global:LegitimateModSignatures) {
+                if ($mod.Name -match "(?i)$ls") { $isKnownLegit = $true; break }
+            }
+        }
+
+        if (-not $isKnownLegit) {
+            foreach ($sig in $Global:CheatSignatures) {
+                if ($mod.Name -match "(?i)$sig") {
+                    $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                    $reason = "Filename matches known cheat signature: $sig"; $aiRisk = 100; break
+                }
             }
         }
 
@@ -234,12 +244,21 @@ function Analyze-InstanceMods {
                 }
 
                 if ($metaAll) {
+                    # Check if metadata declares a legitimate mod ID
+                    if ($Global:LegitimateModSignatures -and -not $isKnownLegit) {
+                        foreach ($ls in $Global:LegitimateModSignatures) {
+                            if ($metaAll -match "(?i)""id""\s*:\s*""[^""]*$ls") { $isKnownLegit = $true; break }
+                        }
+                    }
+
                     # Known cheat signature in metadata id/name
-                    foreach ($sig in $Global:CheatSignatures) {
-                        if ($metaAll -match "(?i)""id""\s*:\s*""[^""]*$sig" -or
-                            $metaAll -match "(?i)""name""\s*:\s*""[^""]*$sig") {
-                            $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
-                            $reason = "Mod metadata id/name matches cheat signature: $sig"; $aiRisk = 100; break
+                    if (-not $isKnownLegit) {
+                        foreach ($sig in $Global:CheatSignatures) {
+                            if ($metaAll -match "(?i)""id""\s*:\s*""[^""]*$sig" -or
+                                $metaAll -match "(?i)""name""\s*:\s*""[^""]*$sig") {
+                                $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                                $reason = "Mod metadata id/name matches cheat signature: $sig"; $aiRisk = 100; break
+                            }
                         }
                     }
                     # Extra heuristic keywords in metadata
