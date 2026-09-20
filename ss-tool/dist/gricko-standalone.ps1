@@ -442,8 +442,8 @@ function Analyze-InstanceMods {
     )
     $suspRegex = [regex]::new('(?i)\b(' + (($suspPats | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')\b', [System.Text.RegularExpressions.RegexOptions]::Compiled)
     $dangerRegex = [regex]::new('(?i)(java/lang/instrument/|sun/misc/Unsafe|java/lang/reflect/Proxy|com/sun/tools/attach/)', [System.Text.RegularExpressions.RegexOptions]::Compiled)
-    $heurRegex = [regex]::new('(?i)\b(killaura|aimbot|triggerbot|reach|velocitymultiplier|antivelocity|novelocity|esp|wallhack|xray|bhop|fly|freecam|nofall|autoeat|scaffold|phase|step|jesus|wurst|meteor|vape|bleachhack|future|sigma|rusherhack|liquidbounce|autoclicker|hack|cheat)\b', [System.Text.RegularExpressions.RegexOptions]::Compiled)
-    $mixinHeurRegex = [regex]::new('(?i)(killaura|aimbot|autoclicker|reach|velocitymultiplier|antivelocity|esp|cheat|hack|antiac)', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+    $heurRegex = [regex]::new('(?i)\b(killaura|aimbot|triggerbot|velocitymultiplier|antivelocity|novelocity|wallhack|xray|bhop|fly|freecam|nofall|autoeat|scaffold|phase|jesus|wurst|meteor|vape|bleachhack|future|sigma|rusherhack|liquidbounce|autoclicker|hack|cheat)\b', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+    $mixinHeurRegex = [regex]::new('(?i)(killaura|aimbot|autoclicker|antivelocity|novelocity|cheat|hack|auto_crystal|anchor_macro|mace_assist|triggerbot)', [System.Text.RegularExpressions.RegexOptions]::Compiled)
 
     # AI Helper: Shannon entropy (randomness measure for obfuscation detection)
     function Measure-NameEntropy {
@@ -615,13 +615,123 @@ function Analyze-InstanceMods {
                         }
                     }
 
-                    if (-not $isFlagged) {
+                    # -- LAYER 5: Full-Mod Deep Behavioral & Capability Analysis ---
+                    # Checks for embedded web dashboards or suspicious indicators to trigger full-JAR decompilation
+                    $hasWebAsset = $false
+                    foreach ($entry in $allEntries) {
+                        if ($entry.FullName -match '(?i)(^web/|\.html$)') { $hasWebAsset = $true; break }
+                    }
 
-                        # -- LAYER 5: Suspicious string constants in .class bytecode ---
-                        $checkCount = [Math]::Min(25, $classEntries.Count)
+                    $needsDeepScan = $isFlagged -or $hasWebAsset -or ($aiRisk -gt 0)
+
+                    if ($needsDeepScan) {
+                        $detectedModules   = [System.Collections.Generic.HashSet[string]]::new()
+                        $detectedMechanics = [System.Collections.Generic.HashSet[string]]::new()
+                        $detectedWebGui    = [System.Collections.Generic.List[string]]::new()
+                        $detectedLicenses  = [System.Collections.Generic.List[string]]::new()
+                        $strHits           = [System.Collections.Generic.List[string]]::new()
+
+                        foreach ($entry in $allEntries) {
+                            $fn = $entry.FullName
+                            $className = [System.IO.Path]::GetFileNameWithoutExtension($fn)
+
+                            # Class name inspection
+                            $mMatch = $cheatClassRegex.Match($fn)
+                            if ($mMatch.Success -and $detectedModules.Count -lt 12) {
+                                $detectedModules.Add($mMatch.Groups[2].Value) | Out-Null
+                            }
+
+                            # Deep content inspection of ALL classes and embedded web/config assets
+                            if ($fn -match '\.(class|html|js|json)$' -and -not $fn.EndsWith("/")) {
+                                try {
+                                    $ces = $entry.Open()
+                                    $readLen = $ces.Read($readBuf, 0, [Math]::Min($entry.Length, 65536))
+                                    $ces.Close()
+                                    $entryText = [System.Text.Encoding]::ASCII.GetString($readBuf, 0, $readLen)
+
+                                    # Module hits in text/bytecode
+                                    $textMatches = $cheatClassRegex.Matches($entryText)
+                                    foreach ($tm in $textMatches) {
+                                        if ($detectedModules.Count -lt 12) { $detectedModules.Add($tm.Groups[2].Value) | Out-Null }
+                                    }
+
+                                    # Behavioral mechanics detection
+                                    if ($entryText -match '(?i)\b(shieldRemove|shieldRemovedEnabled|shieldRemoveDelayMs)\b') {
+                                        $detectedMechanics.Add("Auto Shield-Break (Axe Swap)") | Out-Null
+                                    }
+                                    if ($entryText -match '(?i)\b(aimAssistEnabled|aimFov|aimSpeed)\b') {
+                                        $detectedMechanics.Add("Combat Aim-Assist FOV Cone") | Out-Null
+                                    }
+                                    if ($entryText -match '(?i)\b(fallVelocityCheck|minFallDistance|getDeltaMovement)\b') {
+                                        $detectedMechanics.Add("Fall Velocity Auto-Crit Timing") | Out-Null
+                                    }
+                                    if ($entryText -match '(?i)\b(KeyBinding\.setDown|clickAddKey|InputConstants\.isKeyDown)\b') {
+                                        $detectedMechanics.Add("Simulated Hardware KeyPresses") | Out-Null
+                                    }
+                                    if ($entryText -match '(?i)\b(targetReturnSlot|shieldRemoveDelayMs|autoAxeSwap)\b') {
+                                        $detectedMechanics.Add("Automated Hotbar / Weapon Slot Swapping") | Out-Null
+                                    }
+                                    if ($entryText -match '(?i)\b(LicenseManager|verifyLicense|HWIDUtil)\b') {
+                                        $detectedLicenses.Add("Private Cheat License & HWID Lock") | Out-Null
+                                    }
+
+                                    # Embedded Local Web Cheat Dashboard
+                                    if ($fn -match '\.html$' -and $entryText -match '(?i)(Combat\s*&\s*CPVP|Elite Center|Auto\s*Crystal|Mace\s*Assist|Anchor\s*Macro)') {
+                                        $titleMatch = if ($entryText -match '(?i)<title>(.*?)</title>') { $Matches[1].Trim() } else { "Web GUI" }
+                                        if ($detectedWebGui.Count -lt 2) {
+                                            $detectedWebGui.Add("$fn ('$titleMatch')") | Out-Null
+                                        }
+                                    }
+
+                                    # Bytecode suspicious strings
+                                    $matches = $suspRegex.Matches($entryText)
+                                    foreach ($m in $matches) {
+                                        if ($strHits.Count -lt 6 -and -not $strHits.Contains($m.Value)) {
+                                            $strHits.Add($m.Value)
+                                        }
+                                    }
+                                } catch {}
+                            }
+                        }
+
+                        if ($detectedModules.Count -gt 0 -or $detectedWebGui.Count -gt 0 -or ($detectedMechanics.Count -ge 2)) {
+                            $isFlagged = $true
+                            $aiRisk = 100
+                            $topList = @($detectedModules | Select-Object -First 3)
+                            if ($topList.Count -eq 0) { $topList = @($detectedMechanics | Select-Object -First 2) }
+                            if ($hasMeta) {
+                                $category = "DISGUISED CHEAT / TROJAN MOD"
+                                $reason = "Trojan/Fake mod: disguised as innocent mod but contains combat suite: $($topList -join ', ')"
+                            } else {
+                                $category = "FLAGGED CHEAT / DISALLOWED"
+                                $reason = "Contains combat cheat suite: $($topList -join ', ')"
+                            }
+
+                            # Construct rich AI forensic capability breakdown
+                            $aiDetails.Clear()
+                            if ($detectedModules.Count -gt 0) {
+                                $aiDetails.Add("Modules: $(($detectedModules | Select-Object -First 8) -join ', ')")
+                            }
+                            if ($detectedMechanics.Count -gt 0) {
+                                $aiDetails.Add("Mechanics: $($detectedMechanics -join ', ')")
+                            }
+                            if ($detectedWebGui.Count -gt 0) {
+                                $aiDetails.Add("Embedded GUI: $($detectedWebGui[0])")
+                            }
+                            if ($detectedLicenses.Count -gt 0) {
+                                $aiDetails.Add("Auth: $($detectedLicenses[0])")
+                            }
+                        } elseif ($strHits.Count -ge 4) {
+                            $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'")
+                        } elseif ($strHits.Count -ge 2) {
+                            $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'")
+                        } elseif ($strHits.Count -ge 1) {
+                            $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'")
+                        }
+                    } else {
+                        # Fast-path bytecode sampling for ordinary clean mods
+                        $checkCount = [Math]::Min(10, $classEntries.Count)
                         $strHits    = [System.Collections.Generic.List[string]]::new()
-                        $highHit    = $null
-
                         for ($ci = 0; $ci -lt $checkCount; $ci++) {
                             $ce = $classEntries[$ci]
                             try {
@@ -629,9 +739,6 @@ function Analyze-InstanceMods {
                                 $readLen = $ces.Read($readBuf, 0, [Math]::Min($ce.Length, 65536))
                                 $ces.Close()
                                 $classAscii = [System.Text.Encoding]::ASCII.GetString($readBuf, 0, $readLen)
-                                if (-not $highHit -and $highConfidenceBytecodeRegex.IsMatch($classAscii)) {
-                                    $highHit = $highConfidenceBytecodeRegex.Match($classAscii).Value
-                                }
                                 $matches = $suspRegex.Matches($classAscii)
                                 foreach ($m in $matches) {
                                     if ($strHits.Count -lt 6 -and -not $strHits.Contains($m.Value)) {
@@ -640,20 +747,10 @@ function Analyze-InstanceMods {
                                 }
                             } catch {}
                         }
-
-                        if ($highHit) {
-                            $isFlagged = $true
-                            if ($hasMeta) {
-                                $category = "DISGUISED CHEAT / TROJAN MOD"
-                                $reason = "Trojan/Fake mod: bytecode contains combat automation hook: $highHit"
-                            } else {
-                                $category = "FLAGGED CHEAT / DISALLOWED"
-                                $reason = "Bytecode contains combat automation hook: $highHit"
-                            }
-                            $aiRisk = 100
-                        } elseif ($strHits.Count -ge 4) { $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'") }
-                        elseif   ($strHits.Count -ge 2) { $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'") }
-                        elseif   ($strHits.Count -eq 1) { $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'") }
+                        if ($strHits.Count -ge 4) { $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'") }
+                        elseif ($strHits.Count -ge 2) { $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'") }
+                        elseif ($strHits.Count -eq 1) { $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'") }
+                    }
 
                         # -- LAYER 6: Obfuscation entropy scoring ------------------
                         if ($classNames.Count -ge 5) {
@@ -694,8 +791,6 @@ function Analyze-InstanceMods {
                         if ($dangerHits -ge 3) { $aiRisk += 25; $aiDetails.Add("$dangerHits dangerous Java APIs: instrument/unsafe/proxy/attach") }
                         elseif ($dangerHits -gt 0) { $aiRisk += 8 }
 
-                        $zip.Dispose()
-
                         # -- Final AI Verdict ---------------------------------------
                         $aiRisk = [Math]::Min($aiRisk, 99)
 
@@ -709,10 +804,10 @@ function Analyze-InstanceMods {
                             $reason = "AI Risk: $aiRisk/99 - $top"
                         }
 
+                        $zip.Dispose()
                     } else { $zip.Dispose() }
-                } else { $zip.Dispose() }
-            } catch {}
-        }
+                } catch {}
+            }
 
 
         $modObj = [PSCustomObject]@{
