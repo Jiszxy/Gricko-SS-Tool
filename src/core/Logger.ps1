@@ -64,6 +64,10 @@ function Write-Alert {
     }
     $Global:Findings.Add($entry)
 
+    if ($Global:GuiLoggerCallback) {
+        try { & $Global:GuiLoggerCallback $entry } catch {}
+    }
+
     if ($NoColor) {
         if ($Detail) {
             Write-Host "$timestamp $tag $Message - $Detail"
@@ -81,6 +85,17 @@ function Write-Alert {
         }
     }
 }
+
+function Update-ScanStatus {
+    param(
+        [string]$StatusText,
+        [double]$Percent = -1
+    )
+    if ($Global:GuiStatusCallback) {
+        try { & $Global:GuiStatusCallback $StatusText $Percent } catch {}
+    }
+}
+
 
 function Show-Banner {
     if (-not $NoColor) {

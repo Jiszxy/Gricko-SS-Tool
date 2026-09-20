@@ -57,15 +57,22 @@ Designed to detect active injections, ghost clients (Vape, Drip, Raven, Slinky, 
 
 ## Quick Start (Screenshare One-Liner)
 
-Run directly in an elevated PowerShell terminal:
+Run directly in PowerShell (as Administrator for full kernel artifact visibility):
 
 ```powershell
-irm https://raw.githubusercontent.com/Jiszxy/Gricko-SS-Tool/main/ss-tool/dist/gricko-standalone.ps1 | iex
+irm https://raw.githubusercontent.com/Jiszxy/Gricko-SS-Tool/main/dist/gricko-standalone.ps1 | iex
 ```
 
-Or from Windows Run (`Win + R`) or CMD:
+This immediately launches the **Ocean-Inspired Desktop GUI Application** featuring:
+* Target Minecraft Instance card with live launcher, profile, version & server detection.
+* System & integrity status panel (admin elevation badge, hostname, user).
+* Prominent **START SCAN** button with animated gradient progress bar.
+* Live forensic activity console streaming real-time findings with color-coded badges (`[FLAG]`, `[WARN]`, `[OK]`).
+* Instant Scorecard breakdown with one-click JSON export.
+
+Or launch from Windows Run (`Win + R`) or Command Prompt:
 ```cmd
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Jiszxy/Gricko-SS-Tool/main/ss-tool/dist/gricko-standalone.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubusercontent.com/Jiszxy/Gricko-SS-Tool/main/dist/gricko-standalone.ps1 | iex"
 ```
 
 ---
@@ -74,17 +81,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://raw.githubus
 
 ```powershell
 git clone https://github.com/Jiszxy/Gricko-SS-Tool.git
-cd Gricko-SS-Tool/ss-tool
+cd Gricko-SS-Tool
 .\scanner.ps1
 ```
 
-To recompile modules after editing `src/`:
+To recompile the standalone distribution after modifying `src/`:
 ```powershell
 .\build.ps1
 ```
 
 ### Parameters
-* `-ExportJson`: Export scan report to a timestamped JSON file.
-* `-OutputPath <path>`: Custom destination for the JSON file.
+* `-Cli`: Runs directly in command-line / terminal mode without launching the GUI window.
+* `-ExportJson`: Automatically export scan report to a timestamped JSON file.
+* `-OutputPath <path>`: Custom file path for the JSON export.
 * `-NoElevation`: Run without prompting for UAC elevation.
-* `-NoColor`: Plain-text output for logging.
+* `-NoColor`: Plain-text terminal output.
+* `-HoursPrefetch <int>`: Prefetch lookback window (default: 48).
+* `-HoursBAM <int>`: BAM registry lookback window (default: 72).
+* `-HoursFiles <int>`: File modification lookback window (default: 24).
+

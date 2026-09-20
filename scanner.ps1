@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+    [switch]$Cli,
     [switch]$ExportJson,
     [string]$OutputPath,
     [switch]$NoElevation,
@@ -24,14 +25,15 @@ if ((Test-Path $srcCore) -and (Test-Path $srcMods)) {
         'src\modules\RegistryScanner.ps1',
         'src\modules\FileSystemScanner.ps1',
         'src\modules\HardwareScanner.ps1',
-        'src\modules\ReportExporter.ps1'
+        'src\modules\ReportExporter.ps1',
+        'src\gui\MainWindow.ps1'
     )
 
     foreach ($file in $loadOrder) {
         $modPath = Join-Path $baseDir $file
         if (Test-Path $modPath) {
             . $modPath
-        } else {
+        } elseif ($file -notlike "*gui*") {
             Write-Error "Missing module: $modPath"
             exit 1
         }
@@ -48,16 +50,22 @@ if ((Test-Path $srcCore) -and (Test-Path $srcMods)) {
 }
 
 function Start-ForensicScan {
-    Show-Banner
-    Assert-Elevation
-    Scan-LastPlayedInstance
-    Scan-JavaProcesses
-    Scan-PrefetchTraces -Hours $HoursPrefetch
-    Scan-BAMRegistry -Hours $HoursBAM
-    Scan-UserAssist
-    Scan-FileSystem -Hours $HoursFiles
-    Scan-USBStorage
-    Export-Report -ExportJson:$ExportJson -OutputPath $OutputPath
+    if (-not $Cli -and (Get-Command Show-GrickoGui -ErrorAction SilentlyContinue)) {
+        Assert-Elevation
+        Show-GrickoGui -HoursPrefetch $HoursPrefetch -HoursFiles $HoursFiles -HoursBAM $HoursBAM
+    } else {
+        Show-Banner
+        Assert-Elevation
+        Scan-LastPlayedInstance
+        Scan-JavaProcesses
+        Scan-PrefetchTraces -Hours $HoursPrefetch
+        Scan-BAMRegistry -Hours $HoursBAM
+        Scan-UserAssist
+        Scan-FileSystem -Hours $HoursFiles
+        Scan-USBStorage
+        Export-Report -ExportJson:$ExportJson -OutputPath $OutputPath
+    }
 }
 
 Start-ForensicScan
+

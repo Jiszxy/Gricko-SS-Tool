@@ -51,12 +51,17 @@ function Write-Alert {
         'FLAG' { $color = 'Red';     $Global:ReportData.Scorecard.Flags++ }
     }
 
-    $Global:Findings.Add([PSCustomObject]@{
+    $entry = [PSCustomObject]@{
         Timestamp = $timestamp
         Level     = $Level
         Message   = $Message
         Detail    = $Detail
-    })
+    }
+    $Global:Findings.Add($entry)
+
+    if ($Global:GuiLoggerCallback) {
+        try { & $Global:GuiLoggerCallback $entry } catch {}
+    }
 
     if ($NoColor) {
         if ($Detail) {
@@ -73,6 +78,16 @@ function Write-Alert {
         } else {
             Write-Host ""
         }
+    }
+}
+
+function Update-ScanStatus {
+    param(
+        [string]$StatusText,
+        [double]$Percent = -1
+    )
+    if ($Global:GuiStatusCallback) {
+        try { & $Global:GuiStatusCallback $StatusText $Percent } catch {}
     }
 }
 
