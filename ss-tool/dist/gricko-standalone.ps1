@@ -1,4 +1,4 @@
-﻿[CmdletBinding()]
+[CmdletBinding()]
 param(
     [switch]$ExportJson,
     [string]$OutputPath,
@@ -9,8 +9,12 @@ param(
     [int]$HoursBAM = 72
 )
 
-$Global:ToolName = 'Gricko SS Tool'
-$Global:ToolVersion = '2.1.0'
+<#
+    Gricko SS Tool - Core Configuration & Signature Definitions
+#>
+
+$Global:ToolName = "Gricko SS Tool"
+$Global:ToolVersion = "2.1.0"
 $Global:ScanStartTime = Get-Date
 $Global:Findings = [System.Collections.Generic.List[PSCustomObject]]::new()
 
@@ -18,8 +22,8 @@ $Global:ReportData = [ordered]@{
     Metadata = [ordered]@{
         ToolName        = $Global:ToolName
         Version         = $Global:ToolVersion
-        Theme           = 'Purple-Blue'
-        ScanTimestamp   = $Global:ScanStartTime.ToString('o')
+        Theme           = "Purple-Blue Aesthetic (Ocean Inspired)"
+        ScanTimestamp   = $Global:ScanStartTime.ToString("o")
         HostName        = $env:COMPUTERNAME
         UserName        = "$env:USERDOMAIN\$env:USERNAME"
         OS              = (Get-CimInstance Win32_OperatingSystem).Caption
@@ -34,39 +38,52 @@ $Global:ReportData = [ordered]@{
         Clean    = 0
     }
     LastPlayedInstance = [ordered]@{}
-    JavaProcesses      = @()
-    PrefetchTraces     = @()
-    BAMTraces          = @()
-    UserAssistTraces   = @()
-    ModFiles           = @()
-    TempFiles          = @()
-    DownloadFiles      = @()
-    AntiForensics      = @()
-    USBDevices         = @()
+    JavaProcesses = @()
+    PrefetchTraces = @()
+    BAMTraces = @()
+    UserAssistTraces = @()
+    ModFiles = @()
+    TempFiles = @()
+    DownloadFiles = @()
+    AntiForensics = @()
+    USBDevices = @()
 }
 
+# Known Minecraft cheat clients, autoclickers, injection utilities, and cleansers
 $Global:SuspiciousSignatures = @(
-    'vape', 'raven', 'bplus', 'drip', 'slinky', 'koid', 'itami', 'mango', 'breeze', 
-    'dream', 'haru', 'dope', 'entropy', 'whiteout', 'phantom', 'novoline', 'rise', 
-    'tenacity', 'augustus', 'moon', 'badpack', 'liquidbounce', 'aristois', 'wurst', 
-    'meteor', 'inertial', 'sigma', 'flux', 'pandora', 'fdp', 'zeroday', 'impact', 
-    'bleachhack', 'ares', 'sigma5', 'futureclient', 'rusherhack', 'kamiblue', 'lambda',
-    'lambda-client', 'exhibition', 'astolfo', 'cleanerclient', 'skidclient',
-    'autoclicker', 'auto-clicker', 'fastclick', 'speedclick', 'op-autoclicker', 
-    'gs-autoclicker', 'maxclicker', 'murgee', 'forgeclicker', 'ghostclicker', 
-    'jitterclicker', 'butterflyclicker', 'tinytask', 'speedautoclicker', 'clicker',
-    'macrokey', 'rebind', 'x-mouse', 'xmouse', 'autoclick',
-    'processhacker', 'cheatengine', 'x64dbg', 'x32dbg', 'dnspy', 'ilspy', 
-    'bytecodeviewer', 'recaf', 'javadecompiler', 'injector', 'dllinject', 
-    'extremeinjector', 'nativeinjector', 'systeminformer', 'scylla', 'ghidra',
-    'bleachbit', 'ccleaner', 'usndelete', 'journalcleaner', 'privazer', 
-    'eraser', 'sdelete', 'cleanmem', 'ddelete', 'redact', 'stringcleaner',
-    'eventlogcleaner', 'wevtutil'
+    # Ghost & Blatant Clients
+    "vape", "raven", "bplus", "drip", "slinky", "koid", "itami", "mango", "breeze", 
+    "dream", "haru", "dope", "entropy", "whiteout", "phantom", "novoline", "rise", 
+    "tenacity", "augustus", "moon", "badpack", "liquidbounce", "aristois", "wurst", 
+    "meteor", "inertial", "sigma", "flux", "pandora", "fdp", "zeroday", "impact", 
+    "bleachhack", "ares", "sigma5", "futureclient", "rusherhack", "kamiblue", "lambda",
+    "lambda-client", "exhibition", "astolfo", "cleanerclient", "skidclient",
+
+    # Autoclickers & Macros
+    "autoclicker", "auto-clicker", "fastclick", "speedclick", "op-autoclicker", 
+    "gs-autoclicker", "maxclicker", "murgee", "forgeclicker", "ghostclicker", 
+    "jitterclicker", "butterflyclicker", "tinytask", "speedautoclicker", "clicker",
+    "macrokey", "rebind", "x-mouse", "xmouse", "autoclick",
+
+    # Injection & Memory Inspection
+    "processhacker", "cheatengine", "x64dbg", "x32dbg", "dnspy", "ilspy", 
+    "bytecodeviewer", "recaf", "javadecompiler", "injector", "dllinject", 
+    "extremeinjector", "nativeinjector", "systeminformer", "scylla", "ghidra",
+
+    # Anti-Forensics & Cleaners
+    "bleachbit", "ccleaner", "usndelete", "journalcleaner", "privazer", 
+    "eraser", "sdelete", "cleanmem", "ddelete", "redact", "stringcleaner",
+    "eventlogcleaner", "wevtutil"
 )
 
 
+<#
+    Gricko SS Tool - Terminal UI, Colors & Logging Engine
+    Theme: Purple & Blue (Ocean Inspired)
+#>
+
 function Write-PurpleBorder {
-    param([string]$Text = '')
+    param([string]$Text = "")
     if ($NoColor) {
         Write-Host "================================================================================"
         if ($Text) { Write-Host "  $Text" }
@@ -98,32 +115,33 @@ function Write-SectionHeader {
 function Write-Alert {
     param(
         [Parameter(Mandatory=$true)]
-        [ValidateSet('OK', 'INFO', 'WARN', 'FLAG')]
+        [ValidateSet("OK", "INFO", "WARN", "FLAG")]
         [string]$Level,
 
         [Parameter(Mandatory=$true)]
         [string]$Message,
 
-        [string]$Detail = ''
+        [string]$Detail = ""
     )
 
-    $timestamp = (Get-Date).ToString('HH:mm:ss')
+    $timestamp = (Get-Date).ToString("HH:mm:ss")
     $tag = "[$Level]"
-    $color = 'White'
+    $color = "White"
 
     switch ($Level) {
-        'OK'   { $color = 'Green';   $Global:ReportData.Scorecard.Clean++ }
-        'INFO' { $color = 'Cyan';    $Global:ReportData.Scorecard.Info++ }
-        'WARN' { $color = 'Yellow';  $Global:ReportData.Scorecard.Warnings++ }
-        'FLAG' { $color = 'Red';     $Global:ReportData.Scorecard.Flags++ }
+        "OK"   { $color = "Green";   $Global:ReportData.Scorecard.Clean++ }
+        "INFO" { $color = "Cyan";    $Global:ReportData.Scorecard.Info++ }
+        "WARN" { $color = "Yellow";  $Global:ReportData.Scorecard.Warnings++ }
+        "FLAG" { $color = "Red";     $Global:ReportData.Scorecard.Flags++ }
     }
 
-    $Global:Findings.Add([PSCustomObject]@{
+    $entry = [PSCustomObject]@{
         Timestamp = $timestamp
         Level     = $Level
         Message   = $Message
         Detail    = $Detail
-    })
+    }
+    $Global:Findings.Add($entry)
 
     if ($NoColor) {
         if ($Detail) {
@@ -158,10 +176,14 @@ function Show-Banner {
         Write-Host " ==============================================================================" -ForegroundColor Magenta
         Write-Host ""
     } else {
-        Write-Host "`n=== GRICKO SS TOOL v$($Global:ToolVersion) ===`n"
+        Write-Host "`n=== GRICKO SS TOOL (Minecraft Forensic Scanner v$($Global:ToolVersion)) ===`n"
     }
 }
 
+
+<#
+    Gricko SS Tool - Self-Elevation & Privilege Escalation Handler
+#>
 
 function Assert-Elevation {
     $currentPrincipal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
@@ -170,12 +192,12 @@ function Assert-Elevation {
 
     if (-not $isAdmin) {
         if ($NoElevation) {
-            Write-Alert -Level 'WARN' -Message 'Running as Standard User (NoElevation specified).' -Detail 'BAM, Prefetch, and low-level registry keys may be inaccessible.'
+            Write-Alert -Level "WARN" -Message "Running as Standard User (NoElevation specified)." -Detail "BAM, Prefetch, and low-level registry keys may be inaccessible."
             return
         }
 
-        Write-Alert -Level 'WARN' -Message 'Administrator privileges required for low-level forensic artifacts (Prefetch, BAM, EventLogs).'
-        Write-Alert -Level 'INFO' -Message 'Attempting automatic self-elevation...'
+        Write-Alert -Level "WARN" -Message "Administrator privileges required for low-level forensic artifacts (Prefetch, BAM, EventLogs)."
+        Write-Alert -Level "INFO" -Message "Attempting automatic self-elevation..."
 
         $scriptPath = $PSCommandPath
         if (-not $scriptPath) {
@@ -184,38 +206,43 @@ function Assert-Elevation {
 
         if ($scriptPath -and (Test-Path $scriptPath)) {
             $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
-            if ($ExportJson) { $arguments += ' -ExportJson' }
+            if ($ExportJson) { $arguments += " -ExportJson" }
             if ($OutputPath) { $arguments += " -OutputPath `"$OutputPath`"" }
-            if ($NoColor)    { $arguments += ' -NoColor' }
+            if ($NoColor)    { $arguments += " -NoColor" }
 
             try {
-                Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -Verb RunAs
+                Start-Process -FilePath "powershell.exe" -ArgumentList $arguments -Verb RunAs
                 exit
             } catch {
-                Write-Alert -Level 'WARN' -Message 'UAC Elevation was declined or failed.' -Detail 'Continuing scan in unprivileged mode.'
+                Write-Alert -Level "WARN" -Message "UAC Elevation was declined or failed." -Detail "Continuing scan in unprivileged mode."
             }
         } else {
-            Write-Alert -Level 'WARN' -Message 'Script running from memory or stream. Cannot auto-elevate file.' -Detail 'Run PowerShell as Administrator for full forensic visibility.'
+            Write-Alert -Level "WARN" -Message "Script running from memory or stream. Cannot auto-elevate file." -Detail "Run PowerShell as Administrator for full forensic visibility."
         }
     } else {
-        Write-Alert -Level 'OK' -Message 'Administrative elevation confirmed.' -Detail 'Full access to Prefetch, BAM, and low-level artifacts.'
+        Write-Alert -Level "OK" -Message "Administrative elevation confirmed." -Detail "Full access to Prefetch, BAM, and low-level artifacts."
     }
 }
 
 
+<#
+    Gricko SS Tool - Last Played Instance & Session Log Forensics
+#>
+
 function Scan-LastPlayedInstance {
-    Write-SectionHeader 'LAST PLAYED MINECRAFT INSTANCE & LOG FORENSICS'
+    Write-SectionHeader "LAST PLAYED MINECRAFT INSTANCE & LOG FORENSICS"
 
     $instances = [System.Collections.Generic.List[PSCustomObject]]::new()
 
-    $dotMc = Join-Path $env:APPDATA '.minecraft'
+    # 1. Standard .minecraft (Vanilla, Forge, Fabric, OptiFine)
+    $dotMc = Join-Path $env:APPDATA ".minecraft"
     if (Test-Path $dotMc) {
-        $lpJson = Join-Path $dotMc 'launcher_profiles.json'
-        $latestLog = Join-Path $dotMc 'logs\latest.log'
+        $lpJson = Join-Path $dotMc "launcher_profiles.json"
+        $latestLog = Join-Path $dotMc "logs\latest.log"
 
         $lastUsedTime = $null
-        $profileName = 'Default / Vanilla'
-        $versionId = 'Unknown'
+        $profileName = "Default / Vanilla"
+        $versionId = "Unknown"
 
         if (Test-Path $lpJson) {
             try {
@@ -228,7 +255,7 @@ function Scan-LastPlayedInstance {
                             if (-not $lastUsedTime -or $t -gt $lastUsedTime) {
                                 $lastUsedTime = $t
                                 $profileName = if ($p.name) { $p.name } else { $prop.Name }
-                                $versionId = if ($p.lastVersionId) { $p.lastVersionId } else { 'Custom' }
+                                $versionId = if ($p.lastVersionId) { $p.lastVersionId } else { "Custom" }
                             }
                         }
                     }
@@ -242,27 +269,28 @@ function Scan-LastPlayedInstance {
 
         if ($lastUsedTime) {
             $instances.Add([PSCustomObject]@{
-                Launcher   = 'Standard .minecraft (Vanilla/Forge/Fabric)'
-                Profile    = $profileName
-                Version    = $versionId
-                Path       = $dotMc
-                LogFile    = $latestLog
-                LastPlayed = $lastUsedTime
+                Launcher      = "Standard .minecraft (Vanilla/Forge/Fabric)"
+                Profile       = $profileName
+                Version       = $versionId
+                Path          = $dotMc
+                LogFile       = $latestLog
+                LastPlayed    = $lastUsedTime
             })
         }
     }
 
-    $lunarPath = Join-Path $env:USERPROFILE '.lunarclient'
+    # 2. Lunar Client
+    $lunarPath = Join-Path $env:USERPROFILE ".lunarclient"
     if (Test-Path $lunarPath) {
-        $lunarLog = Join-Path $lunarPath 'offline\multiver\logs\latest.log'
+        $lunarLog = Join-Path $lunarPath "offline\multiver\logs\latest.log"
         if (-not (Test-Path $lunarLog)) {
-            $lunarLog = Join-Path $lunarPath 'logs\launcher\renderer.log'
+            $lunarLog = Join-Path $lunarPath "logs\launcher\renderer.log"
         }
         if (Test-Path $lunarLog) {
             $instances.Add([PSCustomObject]@{
-                Launcher   = 'Lunar Client'
-                Profile    = 'Lunar MultiVer Profile'
-                Version    = 'Lunar'
+                Launcher   = "Lunar Client"
+                Profile    = "Lunar MultiVer Profile"
+                Version    = "Lunar"
                 Path       = $lunarPath
                 LogFile    = $lunarLog
                 LastPlayed = (Get-Item $lunarLog).LastWriteTime
@@ -270,15 +298,16 @@ function Scan-LastPlayedInstance {
         }
     }
 
-    $badlionPath = Join-Path $env:APPDATA 'Badlion Client'
-    if (-not (Test-Path $badlionPath)) { $badlionPath = Join-Path $env:APPDATA '.minecraft\badlion' }
+    # 3. Badlion Client
+    $badlionPath = Join-Path $env:APPDATA "Badlion Client"
+    if (-not (Test-Path $badlionPath)) { $badlionPath = Join-Path $env:APPDATA ".minecraft\badlion" }
     if (Test-Path $badlionPath) {
-        $blLog = Join-Path $badlionPath 'logs\latest.log'
+        $blLog = Join-Path $badlionPath "logs\latest.log"
         if (Test-Path $blLog) {
             $instances.Add([PSCustomObject]@{
-                Launcher   = 'Badlion Client'
-                Profile    = 'Badlion Standard'
-                Version    = 'Badlion'
+                Launcher   = "Badlion Client"
+                Profile    = "Badlion Standard"
+                Version    = "Badlion"
                 Path       = $badlionPath
                 LogFile    = $blLog
                 LastPlayed = (Get-Item $blLog).LastWriteTime
@@ -286,14 +315,15 @@ function Scan-LastPlayedInstance {
         }
     }
 
-    $featherPath = Join-Path $env:APPDATA '.feather'
+    # 4. Feather Client
+    $featherPath = Join-Path $env:APPDATA ".feather"
     if (Test-Path $featherPath) {
-        $featherLog = Join-Path $featherPath 'logs\latest.log'
+        $featherLog = Join-Path $featherPath "logs\latest.log"
         if (Test-Path $featherLog) {
             $instances.Add([PSCustomObject]@{
-                Launcher   = 'Feather Client'
-                Profile    = 'Feather Profile'
-                Version    = 'Feather'
+                Launcher   = "Feather Client"
+                Profile    = "Feather Profile"
+                Version    = "Feather"
                 Path       = $featherPath
                 LogFile    = $featherLog
                 LastPlayed = (Get-Item $featherLog).LastWriteTime
@@ -301,16 +331,17 @@ function Scan-LastPlayedInstance {
         }
     }
 
-    $prismPath = Join-Path $env:APPDATA 'PrismLauncher\instances'
+    # 5. Prism Launcher / MultiMC
+    $prismPath = Join-Path $env:APPDATA "PrismLauncher\instances"
     if (Test-Path $prismPath) {
         $prismDirs = Get-ChildItem -Path $prismPath -Directory
         foreach ($pDir in $prismDirs) {
-            $pLog = Join-Path $pDir.FullName '.minecraft\logs\latest.log'
+            $pLog = Join-Path $pDir.FullName ".minecraft\logs\latest.log"
             if (Test-Path $pLog) {
                 $instances.Add([PSCustomObject]@{
-                    Launcher   = 'Prism Launcher'
+                    Launcher   = "Prism Launcher"
                     Profile    = $pDir.Name
-                    Version    = 'Prism'
+                    Version    = "Prism"
                     Path       = $pDir.FullName
                     LogFile    = $pLog
                     LastPlayed = (Get-Item $pLog).LastWriteTime
@@ -319,16 +350,17 @@ function Scan-LastPlayedInstance {
         }
     }
 
-    $theseusPath = Join-Path $env:APPDATA 'com.modrinth.theseus\profiles'
+    # 6. Modrinth Launcher (Theseus)
+    $theseusPath = Join-Path $env:APPDATA "com.modrinth.theseus\profiles"
     if (Test-Path $theseusPath) {
         $modrinthDirs = Get-ChildItem -Path $theseusPath -Directory
         foreach ($mDir in $modrinthDirs) {
-            $mLog = Join-Path $mDir.FullName 'logs\latest.log'
+            $mLog = Join-Path $mDir.FullName "logs\latest.log"
             if (Test-Path $mLog) {
                 $instances.Add([PSCustomObject]@{
-                    Launcher   = 'Modrinth App (Theseus)'
+                    Launcher   = "Modrinth App (Theseus)"
                     Profile    = $mDir.Name
-                    Version    = 'Modrinth Profile'
+                    Version    = "Modrinth Profile"
                     Path       = $mDir.FullName
                     LogFile    = $mLog
                     LastPlayed = (Get-Item $mLog).LastWriteTime
@@ -337,6 +369,7 @@ function Scan-LastPlayedInstance {
         }
     }
 
+    # Pick the most recently launched instance
     $sortedInstances = $instances | Sort-Object LastPlayed -Descending
     $lastPlayed = $sortedInstances | Select-Object -First 1
 
@@ -372,15 +405,16 @@ function Scan-LastPlayedInstance {
             Version    = $lastPlayed.Version
             Path       = $lastPlayed.Path
             LogFile    = $lastPlayed.LogFile
-            LastPlayed = $lastPlayed.LastPlayed.ToString('o')
+            LastPlayed = $lastPlayed.LastPlayed.ToString("o")
         }
 
+        # Deep Inspection of Instance latest.log
         if (Test-Path $lastPlayed.LogFile) {
             $logItem = Get-Item $lastPlayed.LogFile
-            Write-Alert -Level 'INFO' -Message 'Analyzing session log file' -Detail "$($lastPlayed.LogFile) (Size: $([math]::Round($logItem.Length / 1KB, 2)) KB)"
+            Write-Alert -Level "INFO" -Message "Analyzing session log file" -Detail "$($lastPlayed.LogFile) (Size: $([math]::Round($logItem.Length / 1KB, 2)) KB)"
 
             if ($logItem.Length -eq 0) {
-                Write-Alert -Level 'FLAG' -Message 'INSTANCE LOG WAS WIPED OR EMPTY (0 BYTES)!' -Detail 'Potential log clearance before screenshare.'
+                Write-Alert -Level "FLAG" -Message "INSTANCE LOG WAS WIPED OR EMPTY (0 BYTES)!" -Detail "Strong indicator of log clearing right before screenshare."
             } else {
                 $logLines = Get-Content -Path $lastPlayed.LogFile -Tail 300 -ErrorAction SilentlyContinue
 
@@ -388,7 +422,7 @@ function Scan-LastPlayedInstance {
                 $connectedServers = @()
 
                 foreach ($line in $logLines) {
-                    if ($line -match 'Connecting to ([^,\s]+)') {
+                    if ($line -match "Connecting to ([^,\s]+)") {
                         $server = $matches[1].Trim()
                         if ($server -notin $connectedServers) {
                             $connectedServers += $server
@@ -398,35 +432,39 @@ function Scan-LastPlayedInstance {
                     foreach ($sig in $Global:SuspiciousSignatures) {
                         if ($line -match "(?i)\b$sig\b") {
                             $suspiciousLogHits++
-                            Write-Alert -Level 'FLAG' -Message 'SUSPICIOUS STRING FOUND IN ACTIVE SESSION LOG!' -Detail "Line: $line"
+                            Write-Alert -Level "FLAG" -Message "SUSPICIOUS STRING FOUND IN ACTIVE SESSION LOG!" -Detail "Line: $line"
                             break
                         }
                     }
                 }
 
                 if ($connectedServers.Count -gt 0) {
-                    Write-Alert -Level 'INFO' -Message 'Connected servers identified in session' -Detail ($connectedServers -join ', ')
+                    Write-Alert -Level "INFO" -Message "Connected servers identified in session" -Detail ($connectedServers -join ", ")
                 }
 
                 if ($suspiciousLogHits -eq 0) {
-                    Write-Alert -Level 'OK' -Message 'No known cheat signatures or injection traces found in latest.log.'
+                    Write-Alert -Level "OK" -Message "No known cheat signatures or injection traces found in latest.log."
                 }
             }
         }
     } else {
-        Write-Alert -Level 'WARN' -Message 'Could not detect any Minecraft launchers or instance profiles.' -Detail 'Minecraft may be installed on a non-standard drive or launched as portable.'
+        Write-Alert -Level "WARN" -Message "Could not detect any Minecraft launchers or instance profiles." -Detail "Minecraft may be installed on a non-standard drive or launched as portable."
     }
 }
 
 
+<#
+    Gricko SS Tool - Java & Process Memory Forensic Scanner
+#>
+
 function Scan-JavaProcesses {
-    Write-SectionHeader 'PROCESS & MEMORY ANALYSIS (ACTIVE JVM / INJECTION)'
+    Write-SectionHeader "PROCESS & MEMORY ANALYSIS (ACTIVE JVM / INJECTION)"
     
     $procQuery = "Name = 'javaw.exe' or Name = 'java.exe'"
     $processes = Get-CimInstance Win32_Process -Filter $procQuery
 
     if (-not $processes) {
-        Write-Alert -Level 'INFO' -Message 'No active javaw.exe or java.exe processes found.' -Detail 'Game may be closed.'
+        Write-Alert -Level "INFO" -Message "No active javaw.exe or java.exe processes found." -Detail "Screenshare may be conducted post-gameplay or client was terminated."
         return
     }
 
@@ -440,27 +478,28 @@ function Scan-JavaProcesses {
             ProcessId       = $pidNum
             Name            = $proc.Name
             ExecutablePath  = $execPath
-            CreationDate    = if ($createTime) { $createTime.ToString('o') } else { 'N/A' }
+            CreationDate    = if ($createTime) { $createTime.ToString("o") } else { "N/A" }
             CommandLine     = $cmdLine
             JavaAgents      = @()
             SuspiciousFlags = @()
         }
 
-        Write-Alert -Level 'INFO' -Message 'Detected active Java process' -Detail "PID: $pidNum | Name: $($proc.Name)"
+        Write-Alert -Level "INFO" -Message "Detected active Java process" -Detail "PID: $pidNum | Name: $($proc.Name)"
 
         if (-not $cmdLine) {
-            Write-Alert -Level 'WARN' -Message "Process PID $pidNum CommandLine is empty or protected."
+            Write-Alert -Level "WARN" -Message "Process PID $pidNum CommandLine is empty or protected."
             $Global:ReportData.JavaProcesses += [PSCustomObject]$procInfo
             continue
         }
 
+        # Check for Java Agents (-javaagent)
         $agentMatches = [regex]::Matches($cmdLine, '-javaagent:([^\s]+)')
         if ($agentMatches.Count -gt 0) {
             foreach ($m in $agentMatches) {
                 $agentPath = $m.Groups[1].Value.Trim('"', "'")
                 $procInfo.JavaAgents += $agentPath
 
-                $isKnownLegit = ($agentPath -like '*jetbrains*' -or $agentPath -like '*byte-buddy*' -or $agentPath -like '*fabric-loader*')
+                $isKnownLegit = ($agentPath -like "*jetbrains*" -or $agentPath -like "*byte-buddy*" -or $agentPath -like "*fabric-loader*")
                 $isSuspiciousKeyword = $false
                 foreach ($sig in $Global:SuspiciousSignatures) {
                     if ($agentPath -like "*$sig*") {
@@ -470,35 +509,37 @@ function Scan-JavaProcesses {
                 }
 
                 if ($isSuspiciousKeyword) {
-                    Write-Alert -Level 'FLAG' -Message 'SUSPICIOUS INJECTED JAVA AGENT DETECTED!' -Detail "PID: $pidNum | Agent: $agentPath"
-                } elseif ($agentPath -like '*Temp*' -or $agentPath -like '*AppData\Local\Temp*' -or $agentPath -like '*Downloads*') {
-                    if ($agentPath -like '*theseus.jar*') {
-                        Write-Alert -Level 'INFO' -Message 'Legitimate Modrinth Launcher Agent loaded from Temp' -Detail $agentPath
+                    Write-Alert -Level "FLAG" -Message "SUSPICIOUS INJECTED JAVA AGENT DETECTED!" -Detail "PID: $pidNum | Agent: $agentPath"
+                } elseif ($agentPath -like "*Temp*" -or $agentPath -like "*AppData\Local\Temp*" -or $agentPath -like "*Downloads*") {
+                    if ($agentPath -like "*theseus.jar*") {
+                        Write-Alert -Level "INFO" -Message "Legitimate Modrinth Launcher Agent loaded from Temp" -Detail $agentPath
                     } else {
-                        Write-Alert -Level 'FLAG' -Message 'JAVA AGENT LOADED FROM UNTRUSTED/TEMP DIRECTORY!' -Detail "PID: $pidNum | Path: $agentPath"
+                        Write-Alert -Level "FLAG" -Message "JAVA AGENT LOADED FROM UNTRUSTED/TEMP DIRECTORY!" -Detail "PID: $pidNum | Path: $agentPath"
                     }
                 } elseif (-not $isKnownLegit) {
-                    Write-Alert -Level 'WARN' -Message "Unverified Java Agent loaded on PID $pidNum" -Detail $agentPath
+                    Write-Alert -Level "WARN" -Message "Unverified Java Agent loaded on PID $pidNum" -Detail $agentPath
                 } else {
-                    Write-Alert -Level 'INFO' -Message 'Standard Java Agent loaded' -Detail $agentPath
+                    Write-Alert -Level "INFO" -Message "Standard Java Agent loaded" -Detail $agentPath
                 }
             }
         } else {
-            Write-Alert -Level 'OK' -Message "No active -javaagent flags detected on PID $pidNum."
+            Write-Alert -Level "OK" -Message "No active -javaagent flags detected on PID $pidNum."
         }
 
-        if ($cmdLine -like '*-noverify*') {
-            Write-Alert -Level 'WARN' -Message "Abnormal JVM flag '-noverify' found." -Detail 'Disables bytecode verification; commonly used by runtime injectors.'
-            $procInfo.SuspiciousFlags += '-noverify'
+        # Check for abnormal JVM parameters
+        if ($cmdLine -like "*-noverify*") {
+            Write-Alert -Level "WARN" -Message "Abnormal JVM flag '-noverify' found." -Detail "Disables bytecode verification; commonly used by runtime injectors."
+            $procInfo.SuspiciousFlags += "-noverify"
         }
-        if ($cmdLine -like '*-Xbootclasspath*') {
-            Write-Alert -Level 'WARN' -Message 'Custom boot classpath manipulation detected (-Xbootclasspath).' -Detail "PID: $pidNum"
-            $procInfo.SuspiciousFlags += '-Xbootclasspath'
+        if ($cmdLine -like "*-Xbootclasspath*") {
+            Write-Alert -Level "WARN" -Message "Custom boot classpath manipulation detected (-Xbootclasspath)." -Detail "PID: $pidNum"
+            $procInfo.SuspiciousFlags += "-Xbootclasspath"
         }
 
+        # Keyword match against entire command line
         foreach ($sig in $Global:SuspiciousSignatures) {
             if ($cmdLine -match "(?i)\b$sig\b") {
-                Write-Alert -Level 'FLAG' -Message 'SUSPICIOUS KEYWORD IN RUNNING JVM COMMAND LINE!' -Detail "PID: $pidNum | Signature: '$sig'"
+                Write-Alert -Level "FLAG" -Message "SUSPICIOUS KEYWORD IN RUNNING JVM COMMAND LINE!" -Detail "PID: $pidNum | Signature: '$sig'"
                 $procInfo.SuspiciousFlags += "Signature: $sig"
             }
         }
@@ -508,25 +549,29 @@ function Scan-JavaProcesses {
 }
 
 
+<#
+    Gricko SS Tool - Prefetch Trace & Execution History Scanner
+#>
+
 function Scan-PrefetchTraces {
     param([int]$Hours = $HoursPrefetch)
     Write-SectionHeader "EXECUTION TRACES: PREFETCH (PAST $Hours HOURS)"
 
-    $prefetchDir = 'C:\Windows\Prefetch'
+    $prefetchDir = "C:\Windows\Prefetch"
     if (-not (Test-Path $prefetchDir)) {
-        Write-Alert -Level 'WARN' -Message "Prefetch directory '$prefetchDir' not found or inaccessible." -Detail 'Elevation required.'
+        Write-Alert -Level "WARN" -Message "Prefetch directory '$prefetchDir' not found or inaccessible." -Detail "Elevation required."
         return
     }
 
     $timeCutoff = (Get-Date).AddHours(-$Hours)
-    $pfFiles = Get-ChildItem -Path $prefetchDir -Filter '*.pf' -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $timeCutoff } | Sort-Object LastWriteTime -Descending
+    $pfFiles = Get-ChildItem -Path $prefetchDir -Filter "*.pf" | Where-Object { $_.LastWriteTime -ge $timeCutoff } | Sort-Object LastWriteTime -Descending
 
     if (-not $pfFiles) {
-        Write-Alert -Level 'WARN' -Message "No Prefetch files modified within the last $Hours hours." -Detail 'Prefetch may be disabled or cleared.'
+        Write-Alert -Level "WARN" -Message "No Prefetch files modified within the last $Hours hours." -Detail "Prefetch may be disabled, cleared, or system recently booted."
         return
     }
 
-    Write-Alert -Level 'INFO' -Message "Analyzed $($pfFiles.Count) recent Prefetch execution records."
+    Write-Alert -Level "INFO" -Message "Analyzed $($pfFiles.Count) recent Prefetch execution records."
 
     $flaggedCount = 0
     foreach ($file in $pfFiles) {
@@ -534,7 +579,7 @@ function Scan-PrefetchTraces {
         $execName = ($rawName -replace '-[A-F0-9]{8}$', '')
 
         $isMatch = $false
-        $matchedSig = ''
+        $matchedSig = ""
 
         foreach ($sig in $Global:SuspiciousSignatures) {
             if ($execName -match "(?i)$sig") {
@@ -547,7 +592,7 @@ function Scan-PrefetchTraces {
         $entry = [PSCustomObject]@{
             File           = $file.Name
             Executable     = $execName
-            LastExecution  = $file.LastWriteTime.ToString('o')
+            LastExecution  = $file.LastWriteTime.ToString("o")
             Size           = $file.Length
             SignatureMatch = $matchedSig
             Flagged        = $isMatch
@@ -556,21 +601,25 @@ function Scan-PrefetchTraces {
 
         if ($isMatch) {
             $flaggedCount++
-            Write-Alert -Level 'FLAG' -Message 'SUSPICIOUS EXECUTABLE IN PREFETCH!' -Detail "$($file.Name) (Last Executed: $($file.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')))"
-        } elseif ($execName -in @('FSUTIL', 'CMD', 'POWERSHELL', 'REGEDIT', 'TASKKILL', 'VSSADMIN')) {
-            Write-Alert -Level 'INFO' -Message 'System utility execution in Prefetch' -Detail "$($file.Name) at $($file.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
+            Write-Alert -Level "FLAG" -Message "SUSPICIOUS EXECUTABLE IN PREFETCH!" -Detail "$($file.Name) (Last Executed: $($file.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')))"
+        } elseif ($execName -in @("FSUTIL", "CMD", "POWERSHELL", "REGEDIT", "TASKKILL", "VSSADMIN")) {
+            Write-Alert -Level "INFO" -Message "System utility execution in Prefetch" -Detail "$($file.Name) at $($file.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
         }
     }
 
     if ($flaggedCount -eq 0) {
-        Write-Alert -Level 'OK' -Message 'No known cheat or cleaner signatures identified in recent Prefetch files.'
+        Write-Alert -Level "OK" -Message "No known cheat or cleaner signatures identified in recent Prefetch files."
     }
 }
 
 
+<#
+    Gricko SS Tool - BAM/DAM Kernel Timestamps & UserAssist ROT13 Registry Scanner
+#>
+
 function Convert-Rot13 {
     param([string]$InputText)
-    if ([string]::IsNullOrEmpty($InputText)) { return '' }
+    if ([string]::IsNullOrEmpty($InputText)) { return "" }
     $chars = $InputText.ToCharArray()
     for ($i = 0; $i -lt $chars.Length; $i++) {
         $c = [int]$chars[$i]
@@ -588,9 +637,9 @@ function Scan-BAMRegistry {
     Write-SectionHeader "EXECUTION TRACES: BAM / DAM REGISTRY (PAST $Hours HOURS)"
 
     $bamBases = @(
-        'HKLM:\SYSTEM\CurrentControlSet\Services\bam\State\UserSettings',
-        'HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings',
-        'HKLM:\SYSTEM\CurrentControlSet\Services\dam\UserSettings'
+        "HKLM:\SYSTEM\CurrentControlSet\Services\bam\State\UserSettings",
+        "HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings",
+        "HKLM:\SYSTEM\CurrentControlSet\Services\dam\UserSettings"
     )
 
     $bamRoot = $null
@@ -602,7 +651,7 @@ function Scan-BAMRegistry {
     }
 
     if (-not $bamRoot) {
-        Write-Alert -Level 'WARN' -Message 'BAM/DAM registry path not accessible.' -Detail 'Requires Administrator elevation.'
+        Write-Alert -Level "WARN" -Message "BAM/DAM registry path not accessible." -Detail "Requires Administrator elevation."
         return
     }
 
@@ -613,12 +662,13 @@ function Scan-BAMRegistry {
 
     foreach ($key in $subKeys) {
         $sid = $key.PSChildName
-        $prop = Get-ItemProperty -Path $key.PSPath -ErrorAction SilentlyContinue
+        $prop = Get-ItemProperty -Path $key.PSPath
 
         foreach ($p in $prop.PSObject.Properties) {
-            if ($p.Name -like '*\*' -and $p.Value -is [byte[]]) {
+            if ($p.Name -like "*\*" -and $p.Value -is [byte[]]) {
                 $rawPath = $p.Name
                 $bytes = $p.Value
+
                 $execDate = $null
 
                 if ($bytes.Length -ge 8) {
@@ -648,7 +698,7 @@ function Scan-BAMRegistry {
                 if ($execDate -and $execDate -ge $timeCutoff) {
                     $totalFound++
                     $isMatch = $false
-                    $matchedSig = ''
+                    $matchedSig = ""
 
                     foreach ($sig in $Global:SuspiciousSignatures) {
                         if ($rawPath -match "(?i)$sig") {
@@ -661,7 +711,7 @@ function Scan-BAMRegistry {
                     $entry = [PSCustomObject]@{
                         SID            = $sid
                         BinaryPath     = $rawPath
-                        LastExecution  = $execDate.ToString('o')
+                        LastExecution  = $execDate.ToString("o")
                         SignatureMatch = $matchedSig
                         Flagged        = $isMatch
                     }
@@ -669,10 +719,10 @@ function Scan-BAMRegistry {
 
                     if ($isMatch) {
                         $flaggedCount++
-                        Write-Alert -Level 'FLAG' -Message 'BAM RECORD MATCHES CHEAT SIGNATURE!' -Detail "$rawPath (Executed: $($execDate.ToString('yyyy-MM-dd HH:mm:ss')))"
-                    } elseif ($rawPath -like '*\AppData\Local\Temp\*' -or $rawPath -like '*\Downloads\*') {
-                        if ($rawPath -like '*.exe' -or $rawPath -like '*.jar') {
-                            Write-Alert -Level 'WARN' -Message 'Executable run from Temp/Downloads recorded in BAM' -Detail "$rawPath ($($execDate.ToString('yyyy-MM-dd HH:mm:ss')))"
+                        Write-Alert -Level "FLAG" -Message "BAM RECORD MATCHES CHEAT SIGNATURE!" -Detail "$rawPath (Executed: $($execDate.ToString('yyyy-MM-dd HH:mm:ss')))"
+                    } elseif ($rawPath -like "*\AppData\Local\Temp\*" -or $rawPath -like "*\Downloads\*") {
+                        if ($rawPath -like "*.exe" -or $rawPath -like "*.jar") {
+                            Write-Alert -Level "WARN" -Message "Executable run from Temp/Downloads recorded in BAM" -Detail "$rawPath ($($execDate.ToString('yyyy-MM-dd HH:mm:ss')))"
                         }
                     }
                 }
@@ -681,33 +731,33 @@ function Scan-BAMRegistry {
     }
 
     if ($totalFound -gt 0) {
-        Write-Alert -Level 'INFO' -Message "Identified $totalFound recent execution events across user accounts via BAM."
+        Write-Alert -Level "INFO" -Message "Identified $totalFound recent execution events across user accounts via BAM."
     } else {
-        Write-Alert -Level 'INFO' -Message "No BAM entries found within the last $Hours hours."
+        Write-Alert -Level "INFO" -Message "No BAM entries found within the last $Hours hours."
     }
 
     if ($flaggedCount -eq 0) {
-        Write-Alert -Level 'OK' -Message 'No known cheat signatures detected in active BAM records.'
+        Write-Alert -Level "OK" -Message "No known cheat signatures detected in active BAM records."
     }
 }
 
 function Scan-UserAssist {
-    Write-SectionHeader 'EXECUTION TRACES: USERASSIST (ROT13 DECODED)'
+    Write-SectionHeader "EXECUTION TRACES: USERASSIST (ROT13 DECODED)"
 
-    $uaBasePath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist'
+    $uaBasePath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist"
     if (-not (Test-Path $uaBasePath)) {
-        Write-Alert -Level 'INFO' -Message 'UserAssist registry key not found.'
+        Write-Alert -Level "INFO" -Message "UserAssist registry key not found."
         return
     }
 
-    $guidKeys = Get-ChildItem -Path $uaBasePath -ErrorAction SilentlyContinue
+    $guidKeys = Get-ChildItem -Path $uaBasePath
     $totalFound = 0
     $flaggedCount = 0
 
     foreach ($gKey in $guidKeys) {
-        $countPath = Join-Path $gKey.PSPath 'Count'
+        $countPath = Join-Path $gKey.PSPath "Count"
         if (Test-Path $countPath) {
-            $props = (Get-ItemProperty -Path $countPath -ErrorAction SilentlyContinue).PSObject.Properties
+            $props = (Get-ItemProperty -Path $countPath).PSObject.Properties
             foreach ($p in $props) {
                 if ($p.Value -is [byte[]] -and $p.Value.Length -ge 68) {
                     $decodedName = Convert-Rot13 -InputText $p.Name
@@ -726,10 +776,10 @@ function Scan-UserAssist {
                         }
                     } catch {}
 
-                    if ($decodedName -like '*.exe' -or $decodedName -like '*.jar' -or $decodedName -like '*.lnk') {
+                    if ($decodedName -like "*.exe" -or $decodedName -like "*.jar" -or $decodedName -like "*.lnk") {
                         $totalFound++
                         $isMatch = $false
-                        $matchedSig = ''
+                        $matchedSig = ""
 
                         foreach ($sig in $Global:SuspiciousSignatures) {
                             if ($decodedName -match "(?i)$sig") {
@@ -740,18 +790,18 @@ function Scan-UserAssist {
                         }
 
                         $entry = [PSCustomObject]@{
-                            GUID           = $gKey.PSChildName
-                            DecodedPath    = $decodedName
-                            RunCount       = $runCount
-                            LastExecution  = if ($execDate) { $execDate.ToString('o') } else { 'N/A' }
-                            SignatureMatch = $matchedSig
-                            Flagged        = $isMatch
+                            GUID          = $gKey.PSChildName
+                            DecodedPath   = $decodedName
+                            RunCount      = $runCount
+                            LastExecution = if ($execDate) { $execDate.ToString("o") } else { "N/A" }
+                            SignatureMatch= $matchedSig
+                            Flagged       = $isMatch
                         }
                         $Global:ReportData.UserAssistTraces += $entry
 
                         if ($isMatch) {
                             $flaggedCount++
-                            Write-Alert -Level 'FLAG' -Message 'USERASSIST MATCH FOR KNOWN CHEAT SIGNATURE!' -Detail "$decodedName (Runs: $runCount | Last: $(if ($execDate){$execDate.ToString('yyyy-MM-dd HH:mm:ss')}else{'N/A'}))"
+                            Write-Alert -Level "FLAG" -Message "USERASSIST MATCH FOR KNOWN CHEAT SIGNATURE!" -Detail "$decodedName (Runs: $runCount | Last: $(if ($execDate){$execDate.ToString('yyyy-MM-dd HH:mm:ss')}else{'N/A'}))"
                         }
                     }
                 }
@@ -760,13 +810,17 @@ function Scan-UserAssist {
     }
 
     if ($totalFound -gt 0) {
-        Write-Alert -Level 'INFO' -Message "Decoded $totalFound application execution traces from UserAssist."
+        Write-Alert -Level "INFO" -Message "Decoded $totalFound application execution traces from UserAssist."
     }
     if ($flaggedCount -eq 0) {
-        Write-Alert -Level 'OK' -Message 'No known cheat signatures present in UserAssist history.'
+        Write-Alert -Level "OK" -Message "No known cheat signatures present in UserAssist history."
     }
 }
 
+
+<#
+    Gricko SS Tool - File System, Mods, Temp Drops & Anti-Forensics Scanner
+#>
 
 function Scan-FileSystem {
     param([int]$Hours = $HoursFiles)
@@ -774,16 +828,17 @@ function Scan-FileSystem {
 
     $timeCutoff = (Get-Date).AddHours(-$Hours)
 
-    $mcModsPath = Join-Path $env:APPDATA '.minecraft\mods'
+    # 1. Minecraft Mods Directory Scan
+    $mcModsPath = Join-Path $env:APPDATA ".minecraft\mods"
     if (Test-Path $mcModsPath) {
-        $mods = Get-ChildItem -Path $mcModsPath -File -ErrorAction SilentlyContinue
-        Write-Alert -Level 'INFO' -Message 'Found Minecraft mods directory' -Detail "Path: $mcModsPath ($($mods.Count) files)"
+        $mods = Get-ChildItem -Path $mcModsPath -File
+        Write-Alert -Level "INFO" -Message "Found Minecraft mods directory" -Detail "Path: $mcModsPath ($($mods.Count) files)"
 
         $modFlags = 0
         foreach ($mod in $mods) {
             $isRecent = ($mod.LastWriteTime -ge $timeCutoff)
             $isSusName = $false
-            $matchedSig = ''
+            $matchedSig = ""
 
             foreach ($sig in $Global:SuspiciousSignatures) {
                 if ($mod.Name -match "(?i)$sig") {
@@ -793,13 +848,13 @@ function Scan-FileSystem {
                 }
             }
 
-            $isAbnormalExt = ($mod.Extension -notin @('.jar', '.litemod', '.disabled'))
+            $isAbnormalExt = ($mod.Extension -notin @(".jar", ".litemod", ".disabled"))
 
             $entry = [PSCustomObject]@{
                 FileName      = $mod.Name
                 FullPath      = $mod.FullName
                 SizeKB        = [math]::Round($mod.Length / 1KB, 2)
-                LastWriteTime = $mod.LastWriteTime.ToString('o')
+                LastWriteTime = $mod.LastWriteTime.ToString("o")
                 Recent        = $isRecent
                 Flagged       = ($isSusName -or $isAbnormalExt)
                 Reason        = if ($isSusName) { "Signature: $matchedSig" } elseif ($isAbnormalExt) { "Abnormal Extension: $($mod.Extension)" } else { "Clean" }
@@ -808,22 +863,23 @@ function Scan-FileSystem {
 
             if ($isSusName) {
                 $modFlags++
-                Write-Alert -Level 'FLAG' -Message 'CHEAT MOD DETECTED IN MODS DIRECTORY!' -Detail "$($mod.Name) (Matches: $matchedSig)"
+                Write-Alert -Level "FLAG" -Message "CHEAT MOD DETECTED IN MODS DIRECTORY!" -Detail "$($mod.Name) (Matches: $matchedSig)"
             } elseif ($isAbnormalExt) {
                 $modFlags++
-                Write-Alert -Level 'FLAG' -Message 'ABNORMAL FILE DETECTED IN MODS DIRECTORY!' -Detail "$($mod.Name) (Extension: $($mod.Extension))"
+                Write-Alert -Level "FLAG" -Message "ABNORMAL FILE DETECTED IN MODS DIRECTORY!" -Detail "$($mod.Name) (Extension: $($mod.Extension))"
             } elseif ($isRecent) {
-                Write-Alert -Level 'WARN' -Message "Mod file recently modified (within $Hours hours)" -Detail "$($mod.Name) at $($mod.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
+                Write-Alert -Level "WARN" -Message "Mod file recently modified (within $Hours hours)" -Detail "$($mod.Name) at $($mod.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
             }
         }
 
         if ($modFlags -eq 0) {
-            Write-Alert -Level 'OK' -Message 'No known cheat clients or abnormal files detected in .minecraft\mods.'
+            Write-Alert -Level "OK" -Message "No known cheat clients or abnormal files detected in .minecraft\mods."
         }
     } else {
-        Write-Alert -Level 'INFO' -Message "No standard .minecraft\mods directory found at $mcModsPath."
+        Write-Alert -Level "INFO" -Message "No standard .minecraft\mods directory found at $mcModsPath."
     }
 
+    # 2. Temp Directories Inspection
     $tempPaths = @($env:TEMP, "$env:LOCALAPPDATA\Temp") | Select-Object -Unique
     $tempFilesFound = 0
     $tempFlags = 0
@@ -831,12 +887,12 @@ function Scan-FileSystem {
     foreach ($tPath in $tempPaths) {
         if (Test-Path $tPath) {
             $recentTemp = Get-ChildItem -Path $tPath -File -Recurse -Depth 2 -ErrorAction SilentlyContinue |
-                Where-Object { $_.LastWriteTime -ge $timeCutoff -and ($_.Extension -in @('.jar', '.dll', '.exe', '.class')) }
+                Where-Object { $_.LastWriteTime -ge $timeCutoff -and ($_.Extension -in @(".jar", ".dll", ".exe", ".class")) }
 
             foreach ($tf in $recentTemp) {
                 $tempFilesFound++
                 $isSus = $false
-                $matchedSig = ''
+                $matchedSig = ""
 
                 foreach ($sig in $Global:SuspiciousSignatures) {
                     if ($tf.Name -match "(?i)$sig") {
@@ -851,35 +907,36 @@ function Scan-FileSystem {
                     FullPath      = $tf.FullName
                     Extension     = $tf.Extension
                     SizeKB        = [math]::Round($tf.Length / 1KB, 2)
-                    LastWriteTime = $tf.LastWriteTime.ToString('o')
+                    LastWriteTime = $tf.LastWriteTime.ToString("o")
                     Flagged       = $isSus
                 }
                 $Global:ReportData.TempFiles += $entry
 
                 if ($isSus) {
                     $tempFlags++
-                    Write-Alert -Level 'FLAG' -Message 'SUSPICIOUS PAYLOAD IN TEMP DIRECTORY!' -Detail "$($tf.FullName) (Signature: $matchedSig)"
-                } elseif ($tf.Extension -eq '.jar' -or $tf.Extension -eq '.dll') {
-                    Write-Alert -Level 'WARN' -Message 'Recently dropped executable/library in Temp' -Detail "$($tf.Name) at $($tf.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
+                    Write-Alert -Level "FLAG" -Message "SUSPICIOUS PAYLOAD IN TEMP DIRECTORY!" -Detail "$($tf.FullName) (Signature: $matchedSig)"
+                } elseif ($tf.Extension -eq ".jar" -or $tf.Extension -eq ".dll") {
+                    Write-Alert -Level "WARN" -Message "Recently dropped executable/library in Temp" -Detail "$($tf.Name) at $($tf.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
                 }
             }
         }
     }
 
     if ($tempFilesFound -eq 0) {
-        Write-Alert -Level 'OK' -Message 'No recently created .jar or .dll binaries found in Temp.'
+        Write-Alert -Level "OK" -Message "No recently created .jar or .dll binaries found in Temp."
     } elseif ($tempFlags -eq 0) {
-        Write-Alert -Level 'OK' -Message 'No known cheat signatures in recent Temp drops.'
+        Write-Alert -Level "OK" -Message "No known cheat signatures in recent Temp drops."
     }
 
-    $dlPath = Join-Path $env:USERPROFILE 'Downloads'
+    # 3. Downloads Directory Inspection
+    $dlPath = Join-Path $env:USERPROFILE "Downloads"
     if (Test-Path $dlPath) {
-        $recentDownloads = Get-ChildItem -Path $dlPath -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.LastWriteTime -ge $timeCutoff -and ($_.Extension -in @('.jar', '.exe', '.zip', '.rar', '.7z')) }
+        $recentDownloads = Get-ChildItem -Path $dlPath -File |
+            Where-Object { $_.LastWriteTime -ge $timeCutoff -and ($_.Extension -in @(".jar", ".exe", ".zip", ".rar", ".7z")) }
 
         foreach ($dl in $recentDownloads) {
             $isSus = $false
-            $matchedSig = ''
+            $matchedSig = ""
 
             foreach ($sig in $Global:SuspiciousSignatures) {
                 if ($dl.Name -match "(?i)$sig") {
@@ -893,17 +950,18 @@ function Scan-FileSystem {
                 FileName      = $dl.Name
                 FullPath      = $dl.FullName
                 SizeKB        = [math]::Round($dl.Length / 1KB, 2)
-                LastWriteTime = $dl.LastWriteTime.ToString('o')
+                LastWriteTime = $dl.LastWriteTime.ToString("o")
                 Flagged       = $isSus
             }
             $Global:ReportData.DownloadFiles += $entry
 
             if ($isSus) {
-                Write-Alert -Level 'FLAG' -Message 'CHEAT UTILITY IN RECENT DOWNLOADS!' -Detail "$($dl.Name) (Matches: $matchedSig)"
+                Write-Alert -Level "FLAG" -Message "CHEAT UTILITY IN RECENT DOWNLOADS!" -Detail "$($dl.Name) (Matches: $matchedSig)"
             }
         }
     }
 
+    # 4. Anti-Forensics & Log Tampering Checks
     $logClearCutoff = (Get-Date).AddHours(-72)
     $clearedEvents = @()
 
@@ -916,73 +974,79 @@ function Scan-FileSystem {
 
     if ($clearedEvents.Count -gt 0) {
         foreach ($ev in $clearedEvents) {
-            Write-Alert -Level 'FLAG' -Message 'EVENT LOG PURGE DETECTED (ANTI-FORENSICS)!' -Detail "Log: $($ev.LogName) cleared at $($ev.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss'))"
+            Write-Alert -Level "FLAG" -Message "EVENT LOG PURGE DETECTED (ANTI-FORENSICS)!" -Detail "Log: $($ev.LogName) cleared at $($ev.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss'))"
             $Global:ReportData.AntiForensics += [PSCustomObject]@{
-                Type        = 'EventLogCleared'
+                Type        = "EventLogCleared"
                 LogName     = $ev.LogName
-                TimeCreated = $ev.TimeCreated.ToString('o')
+                TimeCreated = $ev.TimeCreated.ToString("o")
                 Id          = $ev.Id
             }
         }
     } else {
-        Write-Alert -Level 'OK' -Message 'No Security or System event log clearances recorded in the last 72 hours.'
+        Write-Alert -Level "OK" -Message "No Security or System event log clearances recorded in the last 72 hours."
     }
 
+    # 5. Check USN Journal State
     try {
         $usnOutput = & fsutil usn queryjournal C: 2>&1
-        $usnText = $usnOutput -join ' '
-        if ($usnText -like '*is not active*' -or $usnText -like '*Error:*') {
-            Write-Alert -Level 'FLAG' -Message 'USN JOURNAL HAS BEEN DELETED OR DISABLED ON DRIVE C:!' -Detail 'Critical anti-forensics indicator used to erase file deletion history.'
+        $usnText = $usnOutput -join " "
+        if ($usnText -like "*is not active*" -or $usnText -like "*Error:*") {
+            Write-Alert -Level "FLAG" -Message "USN JOURNAL HAS BEEN DELETED OR DISABLED ON DRIVE C:!" -Detail "Critical anti-forensics indicator used to erase file deletion history."
             $Global:ReportData.AntiForensics += [PSCustomObject]@{
-                Type    = 'USNJournalDisabled'
+                Type    = "USNJournalDisabled"
                 Message = $usnText
             }
         } else {
-            Write-Alert -Level 'OK' -Message 'NTFS USN Change Journal is active and healthy on volume C:.'
+            Write-Alert -Level "OK" -Message "NTFS USN Change Journal is active and healthy on volume C:."
         }
     } catch {
-        Write-Alert -Level 'INFO' -Message 'Could not query USN Journal status (requires admin privileges).'
+        Write-Alert -Level "INFO" -Message "Could not query USN Journal status (requires admin privileges)."
     }
 
+    # 6. Check Recycle Bin
     try {
         $shell = New-Object -ComObject Shell.Application
         $recycleBin = $shell.Namespace(10)
         $rbCount = $recycleBin.Items().Count
-        Write-Alert -Level 'INFO' -Message "Recycle Bin item count: $rbCount"
+        Write-Alert -Level "INFO" -Message "Recycle Bin item count: $rbCount"
         
         foreach ($item in $recycleBin.Items()) {
-            if ($item.Name -like '*.jar' -or $item.Name -like '*.exe') {
-                Write-Alert -Level 'WARN' -Message 'Executable or JAR located inside Recycle Bin' -Detail $item.Name
+            if ($item.Name -like "*.jar" -or $item.Name -like "*.exe") {
+                Write-Alert -Level "WARN" -Message "Executable or JAR located inside Recycle Bin" -Detail $item.Name
             }
         }
     } catch {}
 }
 
 
+<#
+    Gricko SS Tool - Hardware & USB Storage Forensic Scanner
+#>
+
 function Scan-USBStorage {
-    Write-SectionHeader 'HARDWARE & STORAGE TRACES: USB STOR HISTORY'
+    Write-SectionHeader "HARDWARE & STORAGE TRACES: USB STOR HISTORY"
 
-    $usbStorPath = 'HKLM:\SYSTEM\CurrentControlSet\Enum\USBSTOR'
+    $usbStorPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\USBSTOR"
     if (-not (Test-Path $usbStorPath)) {
-        Write-Alert -Level 'INFO' -Message 'No USBSTOR registry key present or accessible.'
+        Write-Alert -Level "INFO" -Message "No USBSTOR registry key present or accessible."
         return
     }
 
-    $devices = Get-ChildItem -Path $usbStorPath -ErrorAction SilentlyContinue
+    $devices = Get-ChildItem -Path $usbStorPath
     if (-not $devices) {
-        Write-Alert -Level 'OK' -Message 'No USB storage devices recorded in registry history.'
+        Write-Alert -Level "OK" -Message "No USB storage devices recorded in registry history."
         return
     }
 
-    Write-Alert -Level 'INFO' -Message "Enumerated $($devices.Count) historical USB storage devices."
+    Write-Alert -Level "INFO" -Message "Enumerated $($devices.Count) historical USB storage devices."
 
     foreach ($dev in $devices) {
         $devName = $dev.PSChildName
-        $instances = Get-ChildItem -Path $dev.PSPath -ErrorAction SilentlyContinue
+        $instances = Get-ChildItem -Path $dev.PSPath
 
         foreach ($inst in $instances) {
-            $prop = Get-ItemProperty -Path $inst.PSPath -ErrorAction SilentlyContinue
-            $friendly = if ($prop.FriendlyName) { $prop.FriendlyName } else { 'Generic USB Storage Device' }
+            $prop = Get-ItemProperty -Path $inst.PSPath
+            $friendly = if ($prop.FriendlyName) { $prop.FriendlyName } else { "Generic USB Storage Device" }
             $service = $prop.Service
 
             $entry = [PSCustomObject]@{
@@ -993,22 +1057,27 @@ function Scan-USBStorage {
             }
             $Global:ReportData.USBDevices += $entry
 
-            Write-Alert -Level 'INFO' -Message 'USB Storage Device in Registry' -Detail "$friendly ($devName)"
+            Write-Alert -Level "INFO" -Message "USB Storage Device in Registry" -Detail "$friendly ($devName)"
         }
     }
 
+    # Query currently connected USB Disks
     try {
-        $activeUSB = Get-CimInstance Win32_DiskDrive -Filter "InterfaceType = 'USB'" -ErrorAction SilentlyContinue
+        $activeUSB = Get-CimInstance Win32_DiskDrive -Filter "InterfaceType = 'USB'"
         if ($activeUSB) {
             foreach ($usb in $activeUSB) {
-                Write-Alert -Level 'WARN' -Message 'ACTIVE USB DRIVE CURRENTLY CONNECTED!' -Detail "$($usb.Model) (DeviceID: $($usb.DeviceID) | Size: $([math]::Round($usb.Size / 1GB, 2)) GB)"
+                Write-Alert -Level "WARN" -Message "ACTIVE USB DRIVE CURRENTLY CONNECTED!" -Detail "$($usb.Model) (DeviceID: $($usb.DeviceID) | Size: $([math]::Round($usb.Size / 1GB, 2)) GB)"
             }
         } else {
-            Write-Alert -Level 'OK' -Message 'No active/removable USB storage drives currently mounted.'
+            Write-Alert -Level "OK" -Message "No active/removable USB storage drives currently mounted."
         }
     } catch {}
 }
 
+
+<#
+    Gricko SS Tool - Scorecard & JSON Report Exporter
+#>
 
 function Export-Report {
     param(
@@ -1017,7 +1086,7 @@ function Export-Report {
     )
 
     Write-Host ""
-    Write-PurpleBorder 'GRICKO SS TOOL FORENSIC SCORECARD'
+    Write-PurpleBorder "GRICKO SS TOOL FORENSIC SCORECARD"
 
     $flags = $Global:ReportData.Scorecard.Flags
     $warns = $Global:ReportData.Scorecard.Warnings
@@ -1044,15 +1113,15 @@ function Export-Report {
     if ($ExportJson -or $OutputPath) {
         $targetFile = $OutputPath
         if (-not $targetFile) {
-            $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+            $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
             $targetFile = "Gricko_Report_${timestamp}.json"
         }
 
         try {
             $Global:ReportData | ConvertTo-Json -Depth 6 | Set-Content -Path $targetFile -Encoding UTF8
-            Write-Alert -Level 'OK' -Message 'Complete forensic report exported to JSON' -Detail $targetFile
+            Write-Alert -Level "OK" -Message "Complete forensic report exported to JSON" -Detail $targetFile
         } catch {
-            Write-Alert -Level 'WARN' -Message 'Failed to export JSON report' -Detail $_.Exception.Message
+            Write-Alert -Level "WARN" -Message "Failed to export JSON report" -Detail $_.Exception.Message
         }
     }
 }

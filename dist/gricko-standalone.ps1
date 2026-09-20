@@ -1,9 +1,3 @@
-﻿<#
-.SYNOPSIS
-    Gricko SS Tool - Standalone Distribution Bundle
-    Ocean-Inspired Purple & Blue Minecraft Forensic Scanner
-#>
-
 [CmdletBinding()]
 param(
     [switch]$ExportJson,
@@ -15,7 +9,6 @@ param(
     [int]$HoursBAM = 72
 )
 
-# --- BEGIN MODULE: src\core\Config.ps1 ---
 <#
     Gricko SS Tool - Core Configuration & Signature Definitions
 #>
@@ -83,9 +76,7 @@ $Global:SuspiciousSignatures = @(
     "eventlogcleaner", "wevtutil"
 )
 
-# --- END MODULE: src\core\Config.ps1 ---
 
-# --- BEGIN MODULE: src\core\Logger.ps1 ---
 <#
     Gricko SS Tool - Terminal UI, Colors & Logging Engine
     Theme: Purple & Blue (Ocean Inspired)
@@ -189,9 +180,7 @@ function Show-Banner {
     }
 }
 
-# --- END MODULE: src\core\Logger.ps1 ---
 
-# --- BEGIN MODULE: src\core\Elevator.ps1 ---
 <#
     Gricko SS Tool - Self-Elevation & Privilege Escalation Handler
 #>
@@ -235,9 +224,7 @@ function Assert-Elevation {
     }
 }
 
-# --- END MODULE: src\core\Elevator.ps1 ---
 
-# --- BEGIN MODULE: src\modules\InstanceScanner.ps1 ---
 <#
     Gricko SS Tool - Last Played Instance & Session Log Forensics
 #>
@@ -465,9 +452,7 @@ function Scan-LastPlayedInstance {
     }
 }
 
-# --- END MODULE: src\modules\InstanceScanner.ps1 ---
 
-# --- BEGIN MODULE: src\modules\ProcessScanner.ps1 ---
 <#
     Gricko SS Tool - Java & Process Memory Forensic Scanner
 #>
@@ -563,9 +548,7 @@ function Scan-JavaProcesses {
     }
 }
 
-# --- END MODULE: src\modules\ProcessScanner.ps1 ---
 
-# --- BEGIN MODULE: src\modules\PrefetchScanner.ps1 ---
 <#
     Gricko SS Tool - Prefetch Trace & Execution History Scanner
 #>
@@ -629,9 +612,7 @@ function Scan-PrefetchTraces {
     }
 }
 
-# --- END MODULE: src\modules\PrefetchScanner.ps1 ---
 
-# --- BEGIN MODULE: src\modules\RegistryScanner.ps1 ---
 <#
     Gricko SS Tool - BAM/DAM Kernel Timestamps & UserAssist ROT13 Registry Scanner
 #>
@@ -836,9 +817,7 @@ function Scan-UserAssist {
     }
 }
 
-# --- END MODULE: src\modules\RegistryScanner.ps1 ---
 
-# --- BEGIN MODULE: src\modules\FileSystemScanner.ps1 ---
 <#
     Gricko SS Tool - File System, Mods, Temp Drops & Anti-Forensics Scanner
 #>
@@ -1039,9 +1018,7 @@ function Scan-FileSystem {
     } catch {}
 }
 
-# --- END MODULE: src\modules\FileSystemScanner.ps1 ---
 
-# --- BEGIN MODULE: src\modules\HardwareScanner.ps1 ---
 <#
     Gricko SS Tool - Hardware & USB Storage Forensic Scanner
 #>
@@ -1097,9 +1074,7 @@ function Scan-USBStorage {
     } catch {}
 }
 
-# --- END MODULE: src\modules\HardwareScanner.ps1 ---
 
-# --- BEGIN MODULE: src\modules\ReportExporter.ps1 ---
 <#
     Gricko SS Tool - Scorecard & JSON Report Exporter
 #>
@@ -1151,11 +1126,7 @@ function Export-Report {
     }
 }
 
-# --- END MODULE: src\modules\ReportExporter.ps1 ---
 
-# ==============================================================================
-# ENTRY POINT / MAIN ORCHESTRATOR
-# ==============================================================================
 function Start-ForensicScan {
     Show-Banner
     Assert-Elevation

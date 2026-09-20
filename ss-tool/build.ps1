@@ -71,5 +71,7 @@ Start-ForensicScan
 
 $bundleContent.AppendLine($entrypoint) | Out-Null
 
-[System.IO.File]::WriteAllText($targetFile, $bundleContent.ToString(), [System.Text.Encoding]::UTF8)
-Write-Host "[OK] Built standalone distribution -> $targetFile" -ForegroundColor Green
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($targetFile, $bundleContent.ToString(), $utf8NoBom)
+Write-Host "[OK] Built standalone distribution (UTF-8 No BOM) -> $targetFile" -ForegroundColor Green
+
