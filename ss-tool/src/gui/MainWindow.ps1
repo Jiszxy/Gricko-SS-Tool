@@ -288,7 +288,8 @@ function Show-GrickoGui {
 </Window>
 "@
 
-    $reader = [System.Xml.XmlNodeReader]::new($xaml)
+    $xml = [xml]$xaml
+    $reader = [System.Xml.XmlNodeReader]::new($xml)
     $window = [System.Windows.Markup.XamlReader]::Load($reader)
 
     # UI Element Handles
