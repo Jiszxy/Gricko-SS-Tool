@@ -34,6 +34,7 @@ $Global:ReportData = [ordered]@{
     UserAssistTraces   = @()
     MuiCacheTraces     = @()
     ActiveInstanceMods = @()
+    AllInstances       = @()
     ModFiles           = @()
     TempFiles          = @()
     AntiForensics      = @()
@@ -44,25 +45,59 @@ $Global:ReportData = [ordered]@{
 $Global:CheatSignatures = @(
     # Ghost & Internal Injection Clients
     "prestige", "grimclient", "grim-client", "vape", "vapelite", "vapev4",
-    "drip", "driplite", "dripsoft", "slinky", "slinkyloader", "raven", "ravenb", 
-    "ravenweave", "weave-loader", "weave", "entropy", "whiteout", "yukon", 
-    "sapphire", "spectral", "dreamclient", "itami", "lowkey", "skilled", "bape", 
+    "drip", "driplite", "dripsoft", "slinky", "slinkyloader", "raven", "ravenb",
+    "ravenweave", "weave-loader", "weave", "entropy", "whiteout", "yukon",
+    "sapphire", "spectral", "dreamclient", "itami", "lowkey", "skilled", "bape",
     "kura", "karma", "breeze", "koid", "phantom", "dope", "haru",
 
     # Blatant, Anarchy & Utility Cheats
-    "rise", "rise6", "augustus", "novoline", "tenacity", "liquidbounce", 
-    "meteor", "wurst", "aristois", "inertial", "inertia", "sigma", "sigma5", 
-    "futureclient", "future-client", "rusherhack", "rusher", "boze", "abyss", 
-    "coffeeclient", "catwithsword", "doomsday", "fdpclient", "lime", "envy", 
-    "pluto", "exhibition", "astolfo", "zeroday", "impact", "bleachhack", "ares", 
+    "rise", "rise6", "augustus", "novoline", "tenacity", "liquidbounce",
+    "meteor", "wurst", "aristois", "inertial", "inertia", "sigma", "sigma5",
+    "futureclient", "future-client", "rusherhack", "rusher", "boze", "abyss",
+    "coffeeclient", "catwithsword", "doomsday", "fdpclient", "lime", "envy",
+    "pluto", "exhibition", "astolfo", "zeroday", "impact", "bleachhack", "ares",
     "kamiblue", "lambda", "cleanerclient", "thunderhack", "mathax",
 
-    # Disallowed Combat Optimizers & Unfair PvP Modifications
+    # Mace / CPVP / Weapon Exploit Mods (1.21+)
+    "bettermace", "better-mace", "maceassist", "mace-assist", "mace.assist",
+    "lungemacro", "lunge-macro", "mace.trigger", "macetrigger",
+    "cpvpmod", "cpvp-mod", "cpvpclient", "macemod", "maceboost",
+    "mace.*optimizer", "windchargemod", "windcharge.*assist",
+
+    # Triggerbot / Auto-Attack / Auto-Swing
+    "triggerbot", "trigger-bot", "triggerbotmanager", "autoattack",
+    "auto-attack", "autoswing", "auto-swing", "swingaura", "attackaura",
+    "combotrigger", "attacktrigger", "clicktrigger", "autoclick",
+    "autoclicker", "auto-clicker", "clickassist",
+
+    # Aim Assist / Rotation Hacks
+    "aimassist", "aim-assist", "maceaimassist", "smoothaim", "smooth-aim",
+    "rotationmanager", "rotation-manager", "aimbot", "aim-bot",
+    "aimhelper", "rotationhelper", "snapaim", "silentaim", "predictiveaim",
+    "targetstrafe", "aimstrafe",
+
+    # Crystal PvP Automation
     "crystal.*optimizer", "crystaloptimizer", "marlow.*crystal",
+    "crystalaura", "crystal-aura", "autocrystal", "auto-crystal",
     "anchor.*optimizer", "anchoroptimizer", "herosanchor",
-    "autoclicker", "auto-clicker", "triggerbot", "reach", "hitbox",
-    "aimassist", "fastplace", "autototem", "autoanchor", "autopot",
-    "freecam", "freelook", "xray", "x-ray", "baritone", "seedcracker"
+    "autocristal", "fastcrystal", "crystalbot",
+
+    # Velocity / Anti-Knockback
+    "velocityhack", "velocity-hack", "antivelocity", "novelocity",
+    "antikb", "anti-kb", "noknockback", "knockbackmod", "kbmod",
+    "velocitymod", "reducekb",
+
+    # Stream-Proof / Anti-Screenshare Evasion
+    "streamproof", "stream-proof", "screenshare.*evad", "antiscreen",
+    "anti-screen", "overlayproof", "hiddenoverlay", "invisibleoverlay",
+    "explodemod",
+
+    # Classic Disallowed Mods
+    "hitbox", "reach", "extendedreach", "reachmod",
+    "fastplace", "autototem", "autoanchor", "autopot", "autoshield",
+    "freecam", "freelook", "xray", "x-ray", "baritone", "seedcracker",
+    "nofall", "nofall.*mod", "antifall", "killaura", "killa.aura",
+    "scaffoldmod", "towerbotmod", "speedmod", "flightmod"
 )
 
 # Known Legitimate Launchers & Mod Loaders

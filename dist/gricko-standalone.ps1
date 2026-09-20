@@ -46,6 +46,7 @@ $Global:ReportData = [ordered]@{
     UserAssistTraces   = @()
     MuiCacheTraces     = @()
     ActiveInstanceMods = @()
+    AllInstances       = @()
     ModFiles           = @()
     TempFiles          = @()
     AntiForensics      = @()
@@ -56,25 +57,59 @@ $Global:ReportData = [ordered]@{
 $Global:CheatSignatures = @(
     # Ghost & Internal Injection Clients
     "prestige", "grimclient", "grim-client", "vape", "vapelite", "vapev4",
-    "drip", "driplite", "dripsoft", "slinky", "slinkyloader", "raven", "ravenb", 
-    "ravenweave", "weave-loader", "weave", "entropy", "whiteout", "yukon", 
-    "sapphire", "spectral", "dreamclient", "itami", "lowkey", "skilled", "bape", 
+    "drip", "driplite", "dripsoft", "slinky", "slinkyloader", "raven", "ravenb",
+    "ravenweave", "weave-loader", "weave", "entropy", "whiteout", "yukon",
+    "sapphire", "spectral", "dreamclient", "itami", "lowkey", "skilled", "bape",
     "kura", "karma", "breeze", "koid", "phantom", "dope", "haru",
 
     # Blatant, Anarchy & Utility Cheats
-    "rise", "rise6", "augustus", "novoline", "tenacity", "liquidbounce", 
-    "meteor", "wurst", "aristois", "inertial", "inertia", "sigma", "sigma5", 
-    "futureclient", "future-client", "rusherhack", "rusher", "boze", "abyss", 
-    "coffeeclient", "catwithsword", "doomsday", "fdpclient", "lime", "envy", 
-    "pluto", "exhibition", "astolfo", "zeroday", "impact", "bleachhack", "ares", 
+    "rise", "rise6", "augustus", "novoline", "tenacity", "liquidbounce",
+    "meteor", "wurst", "aristois", "inertial", "inertia", "sigma", "sigma5",
+    "futureclient", "future-client", "rusherhack", "rusher", "boze", "abyss",
+    "coffeeclient", "catwithsword", "doomsday", "fdpclient", "lime", "envy",
+    "pluto", "exhibition", "astolfo", "zeroday", "impact", "bleachhack", "ares",
     "kamiblue", "lambda", "cleanerclient", "thunderhack", "mathax",
 
-    # Disallowed Combat Optimizers & Unfair PvP Modifications
+    # Mace / CPVP / Weapon Exploit Mods (1.21+)
+    "bettermace", "better-mace", "maceassist", "mace-assist", "mace.assist",
+    "lungemacro", "lunge-macro", "mace.trigger", "macetrigger",
+    "cpvpmod", "cpvp-mod", "cpvpclient", "macemod", "maceboost",
+    "mace.*optimizer", "windchargemod", "windcharge.*assist",
+
+    # Triggerbot / Auto-Attack / Auto-Swing
+    "triggerbot", "trigger-bot", "triggerbotmanager", "autoattack",
+    "auto-attack", "autoswing", "auto-swing", "swingaura", "attackaura",
+    "combotrigger", "attacktrigger", "clicktrigger", "autoclick",
+    "autoclicker", "auto-clicker", "clickassist",
+
+    # Aim Assist / Rotation Hacks
+    "aimassist", "aim-assist", "maceaimassist", "smoothaim", "smooth-aim",
+    "rotationmanager", "rotation-manager", "aimbot", "aim-bot",
+    "aimhelper", "rotationhelper", "snapaim", "silentaim", "predictiveaim",
+    "targetstrafe", "aimstrafe",
+
+    # Crystal PvP Automation
     "crystal.*optimizer", "crystaloptimizer", "marlow.*crystal",
+    "crystalaura", "crystal-aura", "autocrystal", "auto-crystal",
     "anchor.*optimizer", "anchoroptimizer", "herosanchor",
-    "autoclicker", "auto-clicker", "triggerbot", "reach", "hitbox",
-    "aimassist", "fastplace", "autototem", "autoanchor", "autopot",
-    "freecam", "freelook", "xray", "x-ray", "baritone", "seedcracker"
+    "autocristal", "fastcrystal", "crystalbot",
+
+    # Velocity / Anti-Knockback
+    "velocityhack", "velocity-hack", "antivelocity", "novelocity",
+    "antikb", "anti-kb", "noknockback", "knockbackmod", "kbmod",
+    "velocitymod", "reducekb",
+
+    # Stream-Proof / Anti-Screenshare Evasion
+    "streamproof", "stream-proof", "screenshare.*evad", "antiscreen",
+    "anti-screen", "overlayproof", "hiddenoverlay", "invisibleoverlay",
+    "explodemod",
+
+    # Classic Disallowed Mods
+    "hitbox", "reach", "extendedreach", "reachmod",
+    "fastplace", "autototem", "autoanchor", "autopot", "autoshield",
+    "freecam", "freelook", "xray", "x-ray", "baritone", "seedcracker",
+    "nofall", "nofall.*mod", "antifall", "killaura", "killa.aura",
+    "scaffoldmod", "towerbotmod", "speedmod", "flightmod"
 )
 
 # Known Legitimate Launchers & Mod Loaders
@@ -253,15 +288,367 @@ function Assert-Elevation {
 
 
 <#
-    Gricko SS Tool - Last Played Instance & Session Log Forensics
+    Gricko SS Tool - Comprehensive Multi-Client & Multi-Instance Forensic Scanner
+    Discovers, enumerates, and deeply analyzes ALL Minecraft clients, launchers & profiles.
 #>
 
+function Analyze-InstanceLog {
+    param([string]$LogFilePath)
+
+    $result = [PSCustomObject]@{
+        LogExists        = $false
+        LogPath          = $LogFilePath
+        LogSizeKB        = 0
+        IsWiped          = $false
+        ConnectedServers = [System.Collections.Generic.List[string]]::new()
+        SuspiciousHits   = [System.Collections.Generic.List[string]]::new()
+    }
+
+    if (-not $LogFilePath -or -not (Test-Path $LogFilePath)) {
+        return $result
+    }
+
+    try {
+        $logItem = Get-Item $LogFilePath -ErrorAction SilentlyContinue
+        if (-not $logItem) { return $result }
+
+        $result.LogExists = $true
+        $result.LogSizeKB = [math]::Round($logItem.Length / 1KB, 2)
+
+        if ($logItem.Length -eq 0) {
+            $result.IsWiped = $true
+            return $result
+        }
+
+        $logLines = Get-Content -Path $LogFilePath -Tail 300 -ErrorAction SilentlyContinue
+        if ($logLines) {
+            foreach ($line in $logLines) {
+                if ($line -match "Connecting to ([^,\s]+)") {
+                    $srv = $matches[1].Trim()
+                    if ($srv -notin $result.ConnectedServers) { $result.ConnectedServers.Add($srv) }
+                } elseif ($line -match "(?i)Website:\s*([a-zA-Z0-9\.\-]+)") {
+                    $srv = $matches[1].Trim()
+                    if ($srv -notin $result.ConnectedServers) { $result.ConnectedServers.Add($srv) }
+                } elseif ($line -match "(?i)\[CHAT\].*(minemen\.club|hypixel\.net|invadedlands\.net|pvptemple\.com|coldpvp\.com|bedless\.club|mcpvp\.club|syuu\.net|loyisa\.cn)") {
+                    $srv = $matches[1].Trim()
+                    if ($srv -notin $result.ConnectedServers) { $result.ConnectedServers.Add($srv) }
+                }
+
+                foreach ($sig in $Global:SuspiciousSignatures) {
+                    if ($line -match "(?i)\b$sig\b") {
+                        if ($line -notin $result.SuspiciousHits) {
+                            $result.SuspiciousHits.Add($line.Trim())
+                        }
+                        break
+                    }
+                }
+            }
+        }
+    } catch {}
+
+    return $result
+}
+
+function Analyze-InstanceMods {
+    param(
+        [string]$InstancePath,
+        [string]$ProfileName = "Unknown"
+    )
+
+    $result = [PSCustomObject]@{
+        Mods         = [System.Collections.Generic.List[PSCustomObject]]::new()
+        FlaggedMods  = [System.Collections.Generic.List[PSCustomObject]]::new()
+        TotalCount   = 0
+        FlaggedCount = 0
+    }
+
+    if (-not $InstancePath -or -not (Test-Path $InstancePath)) { return $result }
+
+    $candidateModFolders = @(
+        (Join-Path $InstancePath "mods"),
+        (Join-Path $InstancePath "user-mods"),
+        (Join-Path $InstancePath ".minecraft\mods")
+    )
+
+    $modFiles = @()
+    foreach ($mf in $candidateModFolders) {
+        if (Test-Path $mf) {
+            $found = Get-ChildItem -Path $mf -File -Filter "*.jar" -ErrorAction SilentlyContinue
+            if ($found) { $modFiles += $found }
+        }
+    }
+
+    if ($modFiles.Count -eq 0) { return $result }
+
+    $uniqueJars = $modFiles | Sort-Object Name -Unique
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+
+    # AI Helper: Shannon entropy (randomness measure for obfuscation detection)
+    function Measure-NameEntropy {
+        param([string]$s)
+        if (-not $s -or $s.Length -lt 4) { return 0.0 }
+        $freq = @{}
+        foreach ($c in $s.ToCharArray()) { $k = "$c"; if ($freq[$k]) { $freq[$k]++ } else { $freq[$k] = 1 } }
+        $len = $s.Length; $ent = 0.0
+        foreach ($v in $freq.Values) { $p = $v / $len; $ent -= $p * [Math]::Log($p, 2) }
+        return [Math]::Round($ent, 3)
+    }
+
+    # AI Helper: extract printable ASCII strings from raw binary bytes
+    function Get-BinaryStrings {
+        param([byte[]]$buf, [int]$readLen, [int]$minLen = 7)
+        $strings = [System.Collections.Generic.List[string]]::new()
+        $cur = [System.Text.StringBuilder]::new()
+        for ($i = 0; $i -lt $readLen; $i++) {
+            $b = $buf[$i]
+            if ($b -ge 32 -and $b -le 126) { $cur.Append([char]$b) | Out-Null }
+            else { if ($cur.Length -ge $minLen) { $strings.Add($cur.ToString()) }; $cur.Clear() | Out-Null }
+        }
+        if ($cur.Length -ge $minLen) { $strings.Add($cur.ToString()) }
+        return $strings
+    }
+
+    foreach ($mod in $uniqueJars) {
+        $isFlagged    = $false
+        $reason       = "Clean"
+        $category     = "CLEAN"
+        $aiRisk       = 0
+        $aiDetails    = [System.Collections.Generic.List[string]]::new()
+        $displayName  = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
+
+        # ── LAYER 1: Filename signature matching ──────────────────────────────
+        foreach ($sig in $Global:CheatSignatures) {
+            if ($mod.Name -match "(?i)$sig") {
+                $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                $reason = "Filename matches known cheat signature: $sig"; $aiRisk = 100; break
+            }
+        }
+
+        if (-not $isFlagged) {
+            try {
+                $zip        = [System.IO.Compression.ZipFile]::OpenRead($mod.FullName)
+                $allEntries = @($zip.Entries)
+
+                # ── LAYER 2: Mod metadata inspection ─────────────────────────────
+                $metaNames  = @("fabric.mod.json","quilt.mod.json","mcmod.info","META-INF/mods.toml","META-INF/MANIFEST.MF")
+                $metaAll    = ""
+                $hasMeta    = $false
+
+                foreach ($mn in $metaNames) {
+                    $me = $zip.GetEntry($mn)
+                    if ($me) {
+                        $hasMeta = $true
+                        try {
+                            $ms = $me.Open(); $mr = [System.IO.StreamReader]::new($ms)
+                            $metaAll += $mr.ReadToEnd(); $mr.Close(); $ms.Close()
+                        } catch {}
+                    }
+                }
+
+                if ($metaAll) {
+                    # Known cheat signature in metadata id/name
+                    foreach ($sig in $Global:CheatSignatures) {
+                        if ($metaAll -match "(?i)""id""\s*:\s*""[^""]*$sig" -or
+                            $metaAll -match "(?i)""name""\s*:\s*""[^""]*$sig") {
+                            $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                            $reason = "Mod metadata id/name matches cheat signature: $sig"; $aiRisk = 100; break
+                        }
+                    }
+                    # Extra heuristic keywords in metadata
+                    if (-not $isFlagged) {
+                        $heurKw = @("killaura","aimbot","triggerbot","reach","velocity","esp","wallhack",
+                                    "xray","bhop","fly","freecam","nofall","autoeat","scaffold","phase",
+                                    "step","jesus","wurst","meteor","vape","bleachhack","future","sigma",
+                                    "rusherhack","liquidbounce","autoclicker","crystaloptimizer","hack","cheat")
+                        foreach ($kw in $heurKw) {
+                            if ($metaAll -match "(?i)\b$kw\b") {
+                                $aiRisk += 40; $aiDetails.Add("Metadata contains cheat keyword: '$kw'"); break
+                            }
+                        }
+                    }
+                }
+
+                if (-not $isFlagged) {
+
+                    # ── LAYER 3: Mixin configuration analysis ─────────────────────
+                    foreach ($entry in ($allEntries | Where-Object { $_.FullName -match "mixin.*\.json$" })) {
+                        try {
+                            $ms = $entry.Open(); $mr = [System.IO.StreamReader]::new($ms)
+                            $mc = $mr.ReadToEnd(); $mr.Close(); $ms.Close()
+                            if ($mc -match "(?i)(killaura|aimbot|autoclicker|reach|velocity|esp|cheat|hack|inject|bypass|antiac)") {
+                                $aiRisk += 50; $aiDetails.Add("Mixin targets cheat/combat class: $($entry.FullName)"); break
+                            }
+                        } catch {}
+                    }
+
+                    # ── LAYER 4: Known cheat class-path packages ──────────────────
+                    $cheatPkgs = @("wurstclient","meteordevelopment","vape","crystaloptimizer",
+                                   "anchoroptimizer","autoclicker","raven/b","liquidbounce",
+                                   "rusherhack","tenacity","novoline","rise/client","futureclient",
+                                   "astolfo","sigma/client","salware","drip/loader","weavemc",
+                                   "weave/loader","bape/client","lowkey/client","itami/client",
+                                   "dreamclient","entropy/client","spectral/client","pluto/client",
+                                   # Mace / CPVP cheat packages
+                                   "us/kenny","us/kenny/mace","us/kenny/triggerbot","us/kenny/web",
+                                   "maceassist","mace/assist","cpvp/client","cpvpclient",
+                                   "lungemacro","lunge/macro","windchargeassist","windcharge/assist",
+                                   "crystalaura","crystal/aura","autocrystal","auto/crystal")
+
+                    foreach ($entry in $allEntries) {
+                        $eName = $entry.FullName.ToLower()
+                        foreach ($pkg in $cheatPkgs) {
+                            if ($eName -match [regex]::Escape($pkg)) {
+                                $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                                $reason = "Contains known cheat class package: $($entry.FullName)"; $aiRisk = 100; break
+                            }
+                        }
+                        if ($isFlagged) { break }
+                    }
+
+                    if (-not $isFlagged) {
+
+                        # ── LAYER 5: Suspicious string constants in .class bytecode ─
+                        $suspPats = @(
+                            # Standard cheat combat APIs
+                            "RotationManager","AimAssist","AimBot","lookAt","snapTo","smoothAim",
+                            "smoothRotate","rotateToEntity","rotateToPlayer","predictRotation",
+                            "ReachCheck","ReachExtend","hitboxSize","attackRange","extendHitbox",
+                            "setReach","hitboxExpand","reachDistance",
+                            "EspModule","PlayerESP","StorageESP","TracerModule","drawBox","drawOutline",
+                            "KillAura","MultiAura","TriggerBot","AutoClick","attackEntity",
+                            "autoSwing","swingAura","autoAttack","attackAura","triggerAttack",
+                            "FlightModule","SpeedModule","NoFall","StepModule","TimerModule",
+                            "VelocityModule","AntiKnockback","NoVelocity","velocityMultiplier",
+                            "InjectLoader","AgentLoader","premain","agentmain","retransformClasses",
+                            "AntiScreen","DisableDebugger","AntiAC","BypassAC","checkIntegrity",
+                            "streamProof","StreamProof","hideFromScreen","overlayWindow","invisibleOverlay",
+
+                            # Mace / CPVP specific (BetterMace, MaceAssist, etc.)
+                            "MaceAssistManager","MaceAssist","maceAssist","maceTrigger","MaceTrigger",
+                            "LungeMacro","lungeMacro","maceAim","MaceAim","maceBoost","MaceBoost",
+                            "TriggerbotManager","triggerbotManager","triggerBot","TriggerBot",
+                            "PlayerEspManager","playerEspManager","StreamProofOverlayManager",
+                            "WebConfigServer","webConfigServer","explodeMod","ExplodeMod",
+                            "WindChargeAssist","windChargeAssist","maceSwing","autoMace","AutoMace",
+                            "fallVelocityCheck","minFallDistance","aimAssistEnabled","cpvpModule",
+                            "smartCrit","smartCrits","shieldBypass","ShieldBypass","autoAxeSwap",
+                            "CrystalAura","crystalAura","AutoCrystal","autoCrystal","placeDelay",
+                            "breakDelay","clickSimulation","autoGlowstone","autoRefillInventory",
+
+                            # Obfuscator markers
+                            "Allatori","Obfuscated by","Stringer","Zelix","DashO","JBCO","SkidFuscator"
+                        )
+                        $classEntries = @($allEntries | Where-Object { $_.FullName -match "\.class$" } | Select-Object -First 14)
+                        $strHits      = [System.Collections.Generic.List[string]]::new()
+                        $readBuf      = [byte[]]::new(131072)
+
+                        foreach ($ce in $classEntries) {
+                            try {
+                                $ces = $ce.Open()
+                                $readLen = $ces.Read($readBuf, 0, [Math]::Min($ce.Length, 131072))
+                                $ces.Close()
+                                foreach ($cs in (Get-BinaryStrings -buf $readBuf -readLen $readLen -minLen 7)) {
+                                    foreach ($pat in $suspPats) {
+                                        if ($cs -match "(?i)$pat" -and $strHits.Count -lt 6) {
+                                            $strHits.Add($cs.Substring(0, [Math]::Min($cs.Length, 55)).Trim())
+                                        }
+                                    }
+                                }
+                            } catch {}
+                        }
+
+                        if     ($strHits.Count -ge 4) { $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings — '$($strHits[0])'") }
+                        elseif ($strHits.Count -ge 2) { $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'") }
+                        elseif ($strHits.Count -eq 1) { $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'") }
+
+                        # ── LAYER 6: Obfuscation entropy scoring ──────────────────
+                        $classNames = @($allEntries | Where-Object { $_.FullName -match "\.class$" } |
+                            ForEach-Object { [System.IO.Path]::GetFileNameWithoutExtension($_.FullName) })
+
+                        if ($classNames.Count -ge 5) {
+                            $shortRatio = (@($classNames | Where-Object { $_.Length -le 2 }).Count) / $classNames.Count
+                            if ($shortRatio -gt 0.65 -and $classNames.Count -gt 20) {
+                                $aiRisk += 35; $aiDetails.Add("Heavy obfuscation: $([math]::Round($shortRatio*100))% of $($classNames.Count) classes are 1-2 char names")
+                            } elseif ($shortRatio -gt 0.35 -and $classNames.Count -gt 10) {
+                                $aiRisk += 14; $aiDetails.Add("Moderate obfuscation: $([math]::Round($shortRatio*100))% short class names")
+                            }
+                            $ent = Measure-NameEntropy -s (($classNames | Select-Object -First 30) -join "")
+                            if ($ent -gt 4.6) { $aiRisk += 18; $aiDetails.Add("High class-path entropy ($ent bits) — randomized naming") }
+                        }
+
+                        # ── LAYER 7: Suspicious JAR structure ─────────────────────
+                        $classCount    = ($allEntries | Where-Object { $_.FullName -match "\.class$" }).Count
+                        $resourceCount = ($allEntries | Where-Object { $_.FullName -notmatch "\.class$" -and $_.FullName -notmatch "/$" }).Count
+                        $sizeKB        = [math]::Round($mod.Length / 1KB, 1)
+
+                        if (-not $hasMeta)                                { $aiRisk += 20; $aiDetails.Add("No mod metadata (unusual for legitimate mods)") }
+                        if ($resourceCount -eq 0 -and $classCount -gt 5) { $aiRisk += 15; $aiDetails.Add("Pure class-only JAR ($classCount classes, 0 resources)") }
+                        if ($sizeKB -lt 25 -and $classCount -gt 12)      { $aiRisk += 18; $aiDetails.Add("Suspicious: $sizeKB KB JAR with $classCount classes (typical loader)") }
+
+                        # ── LAYER 8: Dangerous Java API imports ───────────────────
+                        $dangerPkgs = @("java/lang/instrument/","sun/misc/Unsafe","java/lang/reflect/Proxy","com/sun/tools/attach/")
+                        $dangerHits = 0; $smallBuf = [byte[]]::new(8192)
+
+                        foreach ($ce in ($allEntries | Where-Object { $_.FullName -match "\.class$" } | Select-Object -First 8)) {
+                            try {
+                                $ces = $ce.Open(); $rlen = $ces.Read($smallBuf, 0, 8192); $ces.Close()
+                                $es  = [System.Text.Encoding]::ASCII.GetString($smallBuf, 0, $rlen)
+                                foreach ($dp in $dangerPkgs) { if ($es -match [regex]::Escape($dp)) { $dangerHits++ } }
+                            } catch {}
+                        }
+                        if ($dangerHits -ge 3) { $aiRisk += 25; $aiDetails.Add("$dangerHits dangerous Java APIs: instrument/unsafe/proxy/attach") }
+                        elseif ($dangerHits -gt 0) { $aiRisk += 8 }
+
+                        $zip.Dispose()
+
+                        # ── Final AI Verdict ───────────────────────────────────────
+                        $aiRisk = [Math]::Min($aiRisk, 99)
+
+                        if ($aiRisk -ge 60) {
+                            $isFlagged = $true; $category = "HEURISTIC RISK — AI FLAGGED"
+                            $top = if ($aiDetails.Count -gt 0) { $aiDetails[0] } else { "Multiple heuristic triggers" }
+                            $reason = "AI Risk: $aiRisk/99 — $top"
+                        } elseif ($aiRisk -ge 30) {
+                            $category = "LOW RISK — REVIEW SUGGESTED"
+                            $top = if ($aiDetails.Count -gt 0) { $aiDetails[0] } else { "Minor heuristic hit" }
+                            $reason = "AI Risk: $aiRisk/99 — $top"
+                        }
+
+                    } else { $zip.Dispose() }
+                } else { $zip.Dispose() }
+            } catch {}
+        }
+
+        $modObj = [PSCustomObject]@{
+            Name          = $displayName
+            FileName      = $mod.Name
+            FullPath      = $mod.FullName
+            SizeKB        = [math]::Round($mod.Length / 1KB, 1)
+            LastWriteTime = $mod.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+            IsFlagged     = $isFlagged
+            Category      = $category
+            Reason        = $reason
+            AIRiskScore   = $aiRisk
+            AIDetails     = if ($aiDetails.Count -gt 0) { ($aiDetails -join " | ") } else { "" }
+        }
+
+        $result.Mods.Add($modObj)
+        if ($isFlagged) { $result.FlaggedMods.Add($modObj); $result.FlaggedCount++ }
+    }
+
+    $result.TotalCount = $result.Mods.Count
+    return $result
+}
+
+
 function Scan-LastPlayedInstance {
-    Write-SectionHeader "LAST PLAYED MINECRAFT INSTANCE & LOG FORENSICS"
+    Write-SectionHeader "MINECRAFT INSTANCES & LOG FORENSICS (ALL CLIENTS)"
 
     $instances = [System.Collections.Generic.List[PSCustomObject]]::new()
 
+    # -------------------------------------------------------------
     # 0. Active Running Java / Minecraft Process Check
+    # -------------------------------------------------------------
     try {
         $javaProcesses = Get-CimInstance Win32_Process -Filter "Name = 'javaw.exe' or Name = 'java.exe'" -ErrorAction SilentlyContinue
         foreach ($proc in $javaProcesses) {
@@ -269,16 +656,16 @@ function Scan-LastPlayedInstance {
             if (-not $cmd) { continue }
             if ($cmd -match "minecraft" -or $cmd -match "lunar" -or $cmd -match "feather" -or $cmd -match "badlion" -or $cmd -match "forge" -or $cmd -match "fabric" -or $cmd -match "optifine" -or $cmd -match "net.minecraft") {
                 $clientName = "Minecraft (Vanilla / Custom)"
-                if ($cmd -match "(?i)feather") { $clientName = "Feather Client (Running)" }
-                elseif ($cmd -match "(?i)lunar") { $clientName = "Lunar Client (Running)" }
-                elseif ($cmd -match "(?i)badlion") { $clientName = "Badlion Client (Running)" }
-                elseif ($cmd -match "(?i)theseus|modrinth") { $clientName = "Modrinth App (Running)" }
-                elseif ($cmd -match "(?i)curseforge") { $clientName = "CurseForge (Running)" }
-                elseif ($cmd -match "(?i)prism") { $clientName = "Prism Launcher (Running)" }
-                elseif ($cmd -match "(?i)salwyrr") { $clientName = "Salwyrr Client (Running)" }
-                elseif ($cmd -match "(?i)labymod") { $clientName = "LabyMod (Running)" }
-                elseif ($cmd -match "(?i)fabric") { $clientName = "Fabric Loader (Running)" }
-                elseif ($cmd -match "(?i)forge") { $clientName = "Forge Loader (Running)" }
+                if ($cmd -match "(?i)feather") { $clientName = "Feather Client" }
+                elseif ($cmd -match "(?i)lunar") { $clientName = "Lunar Client" }
+                elseif ($cmd -match "(?i)badlion") { $clientName = "Badlion Client" }
+                elseif ($cmd -match "(?i)theseus|modrinth") { $clientName = "Modrinth App" }
+                elseif ($cmd -match "(?i)curseforge") { $clientName = "CurseForge" }
+                elseif ($cmd -match "(?i)prism") { $clientName = "Prism Launcher" }
+                elseif ($cmd -match "(?i)salwyrr") { $clientName = "Salwyrr Client" }
+                elseif ($cmd -match "(?i)labymod") { $clientName = "LabyMod" }
+                elseif ($cmd -match "(?i)fabric") { $clientName = "Fabric Loader" }
+                elseif ($cmd -match "(?i)forge") { $clientName = "Forge Loader" }
 
                 $gameDir = $null
                 if ($cmd -match '--gameDir\s+"?([^"]+)"?') { $gameDir = $matches[1].Trim() }
@@ -287,20 +674,22 @@ function Scan-LastPlayedInstance {
                 $logPath = if ($gameDir) { Join-Path $gameDir "logs\latest.log" } else { $null }
 
                 $instances.Add([PSCustomObject]@{
-                    Launcher   = $clientName
-                    Profile    = "Active Running Game (PID $($proc.ProcessId))"
-                    Version    = "Active Session"
+                    Launcher   = "$clientName (Running)"
+                    Profile    = "Active Game (PID $($proc.ProcessId))"
+                    Version    = "Active Running Session"
                     Path       = if ($gameDir) { $gameDir } else { "Process PID $($proc.ProcessId)" }
                     LogFile    = $logPath
                     LastPlayed = (Get-Date)
+                    IsRunning  = $true
                 })
             }
         }
     } catch {}
 
-    # 1. Modrinth Launcher (Theseus & Modrinth App) - Check first to prioritize modern multi-drive installations
+    # -------------------------------------------------------------
+    # 1. Modrinth Launcher (All Profiles & All Drives)
+    # -------------------------------------------------------------
     $modrinthProfileDirs = [System.Collections.Generic.List[string]]::new()
-    
     $candidateModrinthDirs = @(
         (Join-Path $env:APPDATA "com.modrinth.theseus\profiles"),
         (Join-Path $env:APPDATA "ModrinthApp\profiles"),
@@ -352,18 +741,32 @@ function Scan-LastPlayedInstance {
         foreach ($mDir in $subDirs) {
             $mLog = Join-Path $mDir.FullName "logs\latest.log"
             $mTime = if (Test-Path $mLog) { (Get-Item $mLog).LastWriteTime } else { $mDir.LastWriteTime }
+            
+            # Detect version from profile-metadata.json if available
+            $mVer = "Modrinth Profile"
+            $metaJson = Join-Path $mDir.FullName "profile-metadata.json"
+            if (Test-Path $metaJson) {
+                try {
+                    $mj = Get-Content -Raw $metaJson -ErrorAction SilentlyContinue | ConvertFrom-Json
+                    if ($mj.game_version) { $mVer = "$($mj.loader) $($mj.game_version)" }
+                } catch {}
+            }
+
             $instances.Add([PSCustomObject]@{
                 Launcher   = "Modrinth App"
                 Profile    = $mDir.Name
-                Version    = "Modrinth Profile (Fabric)"
+                Version    = $mVer
                 Path       = $mDir.FullName
                 LogFile    = if (Test-Path $mLog) { $mLog } else { $null }
                 LastPlayed = $mTime
+                IsRunning  = $false
             })
         }
     }
 
-    # 2. Feather Client
+    # -------------------------------------------------------------
+    # 2. Feather Client (All Profiles & Root)
+    # -------------------------------------------------------------
     $featherPaths = @(
         (Join-Path $env:APPDATA ".feather"),
         (Join-Path $env:USERPROFILE ".feather"),
@@ -371,38 +774,88 @@ function Scan-LastPlayedInstance {
     )
     foreach ($fPath in $featherPaths) {
         if (Test-Path $fPath) {
-            $fLog = Join-Path $fPath "logs\latest.log"
-            $fLastTime = if (Test-Path $fLog) { (Get-Item $fLog).LastWriteTime } else { (Get-Item $fPath).LastWriteTime }
+            # Check for sub-instances
+            $fInstancesDir = Join-Path $fPath "instances"
+            $hasSub = $false
+            if (Test-Path $fInstancesDir) {
+                $fSubDirs = Get-ChildItem -Path $fInstancesDir -Directory -ErrorAction SilentlyContinue
+                foreach ($fsd in $fSubDirs) {
+                    $hasSub = $true
+                    $fLog = Join-Path $fsd.FullName "logs\latest.log"
+                    $fTime = if (Test-Path $fLog) { (Get-Item $fLog).LastWriteTime } else { $fsd.LastWriteTime }
+                    $instances.Add([PSCustomObject]@{
+                        Launcher   = "Feather Client"
+                        Profile    = $fsd.Name
+                        Version    = "Feather Instance"
+                        Path       = $fsd.FullName
+                        LogFile    = $fLog
+                        LastPlayed = $fTime
+                        IsRunning  = $false
+                    })
+                }
+            }
+
+            # Also add root feather profile
+            $fLogRoot = Join-Path $fPath "logs\latest.log"
+            $fRootTime = if (Test-Path $fLogRoot) { (Get-Item $fLogRoot).LastWriteTime } else { (Get-Item $fPath).LastWriteTime }
             $instances.Add([PSCustomObject]@{
                 Launcher   = "Feather Client"
-                Profile    = "Feather Profile"
+                Profile    = "Feather Default"
                 Version    = "Feather Fabric/Forge"
                 Path       = $fPath
-                LogFile    = $fLog
-                LastPlayed = $fLastTime
+                LogFile    = $fLogRoot
+                LastPlayed = $fRootTime
+                IsRunning  = $false
             })
             break
         }
     }
 
-    # 3. Lunar Client
+    # -------------------------------------------------------------
+    # 3. Lunar Client (MultiVer & Subversions)
+    # -------------------------------------------------------------
     $lunarPath = Join-Path $env:USERPROFILE ".lunarclient"
     if (Test-Path $lunarPath) {
+        $multiVer = Join-Path $lunarPath "offline\multiver"
+        $hasMulti = $false
+        if (Test-Path $multiVer) {
+            $lunarVersions = Get-ChildItem -Path $multiVer -Directory -ErrorAction SilentlyContinue
+            foreach ($lv in $lunarVersions) {
+                $hasMulti = $true
+                $lvLog = Join-Path $lv.FullName "logs\latest.log"
+                if (-not (Test-Path $lvLog)) { $lvLog = Join-Path $multiVer "logs\latest.log" }
+                $lvTime = if (Test-Path $lvLog) { (Get-Item $lvLog).LastWriteTime } else { $lv.LastWriteTime }
+                $instances.Add([PSCustomObject]@{
+                    Launcher   = "Lunar Client"
+                    Profile    = $lv.Name
+                    Version    = "Lunar MultiVer ($($lv.Name))"
+                    Path       = $lv.FullName
+                    LogFile    = $lvLog
+                    LastPlayed = $lvTime
+                    IsRunning  = $false
+                })
+            }
+        }
+
+        # Also add overall Lunar Client profile
         $lunarLog = Join-Path $lunarPath "offline\multiver\logs\latest.log"
         if (-not (Test-Path $lunarLog)) { $lunarLog = Join-Path $lunarPath "logs\launcher\renderer.log" }
         if (-not (Test-Path $lunarLog)) { $lunarLog = Join-Path $lunarPath "logs\launcher\main.log" }
         $lTime = if (Test-Path $lunarLog) { (Get-Item $lunarLog).LastWriteTime } else { (Get-Item $lunarPath).LastWriteTime }
         $instances.Add([PSCustomObject]@{
             Launcher   = "Lunar Client"
-            Profile    = "Lunar MultiVer Profile"
+            Profile    = "Lunar Client"
             Version    = "Lunar Client"
             Path       = $lunarPath
             LogFile    = $lunarLog
             LastPlayed = $lTime
+            IsRunning  = $false
         })
     }
 
+    # -------------------------------------------------------------
     # 4. Badlion Client
+    # -------------------------------------------------------------
     $badlionPaths = @(
         (Join-Path $env:APPDATA "Badlion Client"),
         (Join-Path $env:APPDATA ".minecraft\badlion"),
@@ -419,12 +872,15 @@ function Scan-LastPlayedInstance {
                 Path       = $blPath
                 LogFile    = $blLog
                 LastPlayed = $blTime
+                IsRunning  = $false
             })
             break
         }
     }
 
-    # 5. CurseForge
+    # -------------------------------------------------------------
+    # 5. CurseForge (All Instances)
+    # -------------------------------------------------------------
     $cursePaths = @(
         (Join-Path $env:USERPROFILE "curseforge\minecraft\Instances"),
         (Join-Path $env:USERPROFILE "Documents\curseforge\minecraft\Instances")
@@ -442,12 +898,15 @@ function Scan-LastPlayedInstance {
                     Path       = $cfDir.FullName
                     LogFile    = $cfLog
                     LastPlayed = $cfTime
+                    IsRunning  = $false
                 })
             }
         }
     }
 
-    # 6. Prism Launcher & MultiMC
+    # -------------------------------------------------------------
+    # 6. Prism Launcher & MultiMC & PolyMC (All Instances)
+    # -------------------------------------------------------------
     $prismPaths = @(
         (Join-Path $env:APPDATA "PrismLauncher\instances"),
         (Join-Path $env:APPDATA "MultiMC\instances"),
@@ -467,12 +926,15 @@ function Scan-LastPlayedInstance {
                     Path       = $pDir.FullName
                     LogFile    = $pLog
                     LastPlayed = $pTime
+                    IsRunning  = $false
                 })
             }
         }
     }
 
-    # 7. Salwyrr
+    # -------------------------------------------------------------
+    # 7. Salwyrr Client
+    # -------------------------------------------------------------
     $salwyrrPaths = @(
         (Join-Path $env:APPDATA ".salwyrr"),
         (Join-Path $env:USERPROFILE ".salwyrr")
@@ -488,20 +950,29 @@ function Scan-LastPlayedInstance {
                 Path       = $sPath
                 LogFile    = $sLog
                 LastPlayed = $sTime
+                IsRunning  = $false
             })
             break
         }
     }
 
-    # 8. Standard .minecraft (Vanilla, Forge, Fabric)
-    $dotMc = Join-Path $env:APPDATA ".minecraft"
-    if (Test-Path $dotMc) {
+    # -------------------------------------------------------------
+    # 8. Standard .minecraft (Parse ALL Profiles in launcher_profiles.json)
+    # -------------------------------------------------------------
+    $dotMcCandidates = @((Join-Path $env:APPDATA ".minecraft"))
+    foreach ($drive in (Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue)) {
+        $cand = Join-Path $drive.Root ".minecraft"
+        if ((Test-Path $cand) -and ($cand -notin $dotMcCandidates)) {
+            $dotMcCandidates += $cand
+        }
+    }
+
+    foreach ($dotMc in $dotMcCandidates) {
+        if (-not (Test-Path $dotMc)) { continue }
+
         $lpJson = Join-Path $dotMc "launcher_profiles.json"
         $latestLog = Join-Path $dotMc "logs\latest.log"
-
-        $lastUsedTime = $null
-        $profileName = "Standard Profile"
-        $versionId = "Vanilla / Forge / Fabric"
+        $mcAddedAny = $false
 
         if (Test-Path $lpJson) {
             try {
@@ -509,46 +980,149 @@ function Scan-LastPlayedInstance {
                 if ($lp.profiles) {
                     foreach ($prop in $lp.profiles.PSObject.Properties) {
                         $p = $prop.Value
+                        $pName = if ($p.name) { $p.name } else { $prop.Name }
+                        $vId = if ($p.lastVersionId) { $p.lastVersionId } else { "Vanilla / Forge / Fabric" }
+                        $pDir = if ($p.gameDir -and (Test-Path $p.gameDir)) { $p.gameDir } else { $dotMc }
+                        $pLog = Join-Path $pDir "logs\latest.log"
+                        
+                        $pTime = $null
                         if ($p.lastUsed) {
-                            $t = [DateTime]::Parse($p.lastUsed)
-                            if (-not $lastUsedTime -or $t -gt $lastUsedTime) {
-                                $lastUsedTime = $t
-                                $profileName = if ($p.name) { $p.name } else { $prop.Name }
-                                $versionId = if ($p.lastVersionId) { $p.lastVersionId } else { "Custom" }
-                            }
+                            try { $pTime = [DateTime]::Parse($p.lastUsed) } catch {}
                         }
+                        if (-not $pTime -and (Test-Path $pLog)) {
+                            $pTime = (Get-Item $pLog).LastWriteTime
+                        }
+                        if (-not $pTime) {
+                            $pTime = (Get-Item $pDir).LastWriteTime
+                        }
+
+                        $instances.Add([PSCustomObject]@{
+                            Launcher   = "Standard Minecraft"
+                            Profile    = $pName
+                            Version    = $vId
+                            Path       = $pDir
+                            LogFile    = $pLog
+                            LastPlayed = $pTime
+                            IsRunning  = $false
+                        })
+                        $mcAddedAny = $true
                     }
                 }
             } catch {}
         }
 
-        if (Test-Path $latestLog) {
-            $logWriteTime = (Get-Item $latestLog).LastWriteTime
-            if (-not $lastUsedTime -or $logWriteTime -gt $lastUsedTime) {
-                $lastUsedTime = $logWriteTime
-            }
-        }
-
-        if ($lastUsedTime) {
+        # If no individual profile was added from JSON, add standard .minecraft
+        if (-not $mcAddedAny) {
+            $logWriteTime = if (Test-Path $latestLog) { (Get-Item $latestLog).LastWriteTime } else { (Get-Item $dotMc).LastWriteTime }
             $instances.Add([PSCustomObject]@{
-                Launcher   = "Standard Minecraft (.minecraft)"
-                Profile    = $profileName
-                Version    = $versionId
+                Launcher   = "Standard Minecraft"
+                Profile    = "Standard Profile"
+                Version    = "Vanilla / Forge / Fabric"
                 Path       = $dotMc
                 LogFile    = $latestLog
-                LastPlayed = $lastUsedTime
+                LastPlayed = $logWriteTime
+                IsRunning  = $false
             })
         }
     }
 
-    # Pick the most recently launched instance across all launchers and drives
-    $sortedInstances = $instances | Sort-Object LastPlayed -Descending
+    # -------------------------------------------------------------
+    # Deduplicate & Deep Analyze ALL Discovered Instances
+    # -------------------------------------------------------------
+    $uniqueInstances = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $seenKeys = [System.Collections.Generic.HashSet[string]]::new()
+
+    foreach ($inst in $instances) {
+        $key = "$($inst.Launcher)|$($inst.Profile)|$($inst.Path)".ToLower()
+        if (-not $seenKeys.Contains($key)) {
+            $seenKeys.Add($key) | Out-Null
+            $uniqueInstances.Add($inst)
+        }
+    }
+
+    # Deeply analyze logs and mods for EVERY instance found on the machine
+    $analyzedInstances = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $allFlaggedModsCount = 0
+
+    foreach ($inst in $uniqueInstances) {
+        $logAnalysis = Analyze-InstanceLog -LogFilePath $inst.LogFile
+        $modsAnalysis = Analyze-InstanceMods -InstancePath $inst.Path -ProfileName $inst.Profile
+
+        $lpTimeStr = if ($inst.LastPlayed -is [DateTime]) {
+            $inst.LastPlayed.ToString("yyyy-MM-dd HH:mm:ss")
+        } elseif ($inst.LastPlayed) {
+            "$($inst.LastPlayed)"
+        } else {
+            "Historical"
+        }
+
+        $analyzedObj = [PSCustomObject]@{
+            Id               = [Guid]::NewGuid().ToString()
+            DisplayName      = "$($inst.Launcher) - $($inst.Profile)"
+            Launcher         = $inst.Launcher
+            LauncherName     = $inst.Launcher
+            Profile          = $inst.Profile
+            ProfileName      = $inst.Profile
+            Version          = $inst.Version
+            Path             = $inst.Path
+            LogFile          = $inst.LogFile
+            LastPlayed       = $inst.LastPlayed
+            LastPlayedTime   = $lpTimeStr
+            IsRunning        = [bool]$inst.IsRunning
+            ConnectedServers = $logAnalysis.ConnectedServers
+            IsLogWiped       = $logAnalysis.IsWiped
+            SuspiciousLog    = $logAnalysis.SuspiciousHits
+            Mods             = $modsAnalysis.Mods
+            FlaggedMods      = $modsAnalysis.FlaggedMods
+            TotalModsCount   = $modsAnalysis.TotalCount
+            FlaggedModsCount = $modsAnalysis.FlaggedCount
+        }
+
+        # Raise alerts for cheat detections in any instance
+        if ($analyzedObj.FlaggedModsCount -gt 0) {
+            $allFlaggedModsCount += $analyzedObj.FlaggedModsCount
+            foreach ($fm in $analyzedObj.FlaggedMods) {
+                Write-Alert -Level "FLAG" -Message "SUSPICIOUS OR CHEAT MOD DETECTED!" -Detail "[$($analyzedObj.Launcher) / $($analyzedObj.Profile)] $($fm.FileName) ($($fm.Reason))"
+            }
+        }
+
+        if ($analyzedObj.IsLogWiped) {
+            Write-Alert -Level "FLAG" -Message "INSTANCE LOG WAS WIPED OR EMPTY (0 BYTES)!" -Detail "[$($analyzedObj.Launcher) / $($analyzedObj.Profile)] $($analyzedObj.LogFile)"
+        }
+
+        $analyzedInstances.Add($analyzedObj)
+    }
+
+    # Sort instances: running first, then by last played descending
+    $sortedInstances = $analyzedInstances | Sort-Object -Property @{ Expression = { $_.IsRunning }; Descending = $true }, @{ Expression = { if ($_.LastPlayed -is [DateTime]) { $_.LastPlayed } else { [DateTime]::MinValue } }; Descending = $true }
+
+    $Global:ReportData.AllInstances = $sortedInstances
+
+    # Pick the most suitable default / last played instance
     $lastPlayed = $sortedInstances | Select-Object -First 1
 
     if ($lastPlayed) {
+        $Global:ReportData.LastPlayedInstance = [ordered]@{
+            Launcher         = $lastPlayed.Launcher
+            LauncherName     = $lastPlayed.Launcher
+            Profile          = $lastPlayed.Profile
+            ProfileName      = $lastPlayed.Profile
+            Version          = $lastPlayed.Version
+            Path             = $lastPlayed.Path
+            LogFile          = $lastPlayed.LogFile
+            LastPlayed       = $lastPlayed.LastPlayedTime
+            LastPlayedTime   = $lastPlayed.LastPlayedTime
+            ConnectedServers = $lastPlayed.ConnectedServers
+            IsLogWiped       = $lastPlayed.IsLogWiped
+            TotalModsCount   = $lastPlayed.TotalModsCount
+            FlaggedModsCount = $lastPlayed.FlaggedModsCount
+        }
+
+        $Global:ReportData.ActiveInstanceMods = $lastPlayed.Mods
+
         Write-Host ""
         Write-Host "  +--------------------------------------------------------------------------+" -ForegroundColor Magenta
-        Write-Host "  |  (*) LAST PLAYED INSTANCE IDENTIFIED (ACTIVE TARGET)                     |" -ForegroundColor Magenta
+        Write-Host "  |  (*) ACTIVE TARGET INSTANCE (ALL $($sortedInstances.Count) INSTANCES ANALYZED)               |" -ForegroundColor Magenta
         Write-Host "  +--------------------------------------------------------------------------+" -ForegroundColor Magenta
         Write-Host "  |  Launcher : " -NoNewline -ForegroundColor DarkMagenta
         Write-Host ($lastPlayed.Launcher).PadRight(58) -NoNewline -ForegroundColor Cyan
@@ -560,81 +1134,39 @@ function Scan-LastPlayedInstance {
         Write-Host ($lastPlayed.Version).PadRight(58) -NoNewline -ForegroundColor White
         Write-Host "|" -ForegroundColor Magenta
         Write-Host "  |  Last Run : " -NoNewline -ForegroundColor DarkMagenta
-        Write-Host ($lastPlayed.LastPlayed.ToString("yyyy-MM-dd HH:mm:ss")).PadRight(58) -NoNewline -ForegroundColor Green
+        Write-Host ($lastPlayed.LastPlayedTime).PadRight(58) -NoNewline -ForegroundColor Green
         Write-Host "|" -ForegroundColor Magenta
         Write-Host "  |  Path     : " -NoNewline -ForegroundColor DarkMagenta
         $truncPath = if ($lastPlayed.Path.Length -gt 58) { "..." + $lastPlayed.Path.Substring($lastPlayed.Path.Length - 55) } else { $lastPlayed.Path }
         Write-Host $truncPath.PadRight(58) -NoNewline -ForegroundColor DarkCyan
         Write-Host "|" -ForegroundColor Magenta
+        Write-Host "  |  Mods     : " -NoNewline -ForegroundColor DarkMagenta
+        $modSummary = "$($lastPlayed.TotalModsCount) installed ($($lastPlayed.FlaggedModsCount) flagged)"
+        Write-Host $modSummary.PadRight(58) -NoNewline -ForegroundColor $(if ($lastPlayed.FlaggedModsCount -gt 0) { "Red" } else { "Green" })
+        Write-Host "|" -ForegroundColor Magenta
         Write-Host "  +--------------------------------------------------------------------------+" -ForegroundColor Magenta
         Write-Host ""
 
-        $connectedServers = [System.Collections.Generic.List[string]]::new()
-        $logFileTarget = $lastPlayed.LogFile
-
-        # Deep Inspection of Instance latest.log if present
-        if ($logFileTarget -and (Test-Path $logFileTarget)) {
-            $logItem = Get-Item $logFileTarget
-            Write-Alert -Level "INFO" -Message "Analyzing session log file" -Detail "$logFileTarget (Size: $([math]::Round($logItem.Length / 1KB, 2)) KB)"
-
-            if ($logItem.Length -eq 0) {
-                Write-Alert -Level "FLAG" -Message "INSTANCE LOG WAS WIPED OR EMPTY (0 BYTES)!" -Detail "Strong indicator of log clearing right before screenshare."
-            } else {
-                $logLines = Get-Content -Path $logFileTarget -Tail 300 -ErrorAction SilentlyContinue
-                $suspiciousLogHits = 0
-
-                foreach ($line in $logLines) {
-                    if ($line -match "Connecting to ([^,\s]+)") {
-                        $server = $matches[1].Trim()
-                        if ($server -notin $connectedServers) {
-                            $connectedServers.Add($server)
-                        }
-                    } elseif ($line -match "(?i)Website:\s*([a-zA-Z0-9\.\-]+)") {
-                        $server = $matches[1].Trim()
-                        if ($server -notin $connectedServers) {
-                            $connectedServers.Add($server)
-                        }
-                    } elseif ($line -match "(?i)\[CHAT\].*(minemen\.club|hypixel\.net|invadedlands\.net|pvptemple\.com|coldpvp\.com|bedless\.club|mcpvp\.club|syuu\.net|loyisa\.cn)") {
-                        $server = $matches[1].Trim()
-                        if ($server -notin $connectedServers) {
-                            $connectedServers.Add($server)
-                        }
-                    }
-
-                    foreach ($sig in $Global:SuspiciousSignatures) {
-                        if ($line -match "(?i)\b$sig\b") {
-                            $suspiciousLogHits++
-                            Write-Alert -Level "FLAG" -Message "SUSPICIOUS STRING FOUND IN ACTIVE SESSION LOG!" -Detail "Line: $line"
-                            break
-                        }
-                    }
-                }
-
-                if ($connectedServers.Count -gt 0) {
-                    Write-Alert -Level "INFO" -Message "Connected servers identified in session" -Detail ($connectedServers -join ", ")
-                }
-
-                if ($suspiciousLogHits -eq 0) {
-                    Write-Alert -Level "OK" -Message "No known cheat signatures found in latest.log."
-                }
+        # Summary list of all other detected clients & instances
+        if ($sortedInstances.Count -gt 1) {
+            Write-Host "  Discovered Minecraft Instances ($($sortedInstances.Count) total across all launchers):" -ForegroundColor DarkGray
+            foreach ($other in $sortedInstances) {
+                $statusFlag = if ($other.FlaggedModsCount -gt 0) { "[!] CHEAT MODS ($($other.FlaggedModsCount))" } else { "[OK] Clean ($($other.TotalModsCount) mods)" }
+                $col = if ($other.FlaggedModsCount -gt 0) { "Red" } else { "DarkGray" }
+                Write-Host "    * [$($other.Launcher)] $($other.Profile) -> $statusFlag | Last: $($other.LastPlayedTime)" -ForegroundColor $col
             }
+            Write-Host ""
         }
 
-        $Global:ReportData.LastPlayedInstance = [ordered]@{
-            Launcher         = $lastPlayed.Launcher
-            LauncherName     = $lastPlayed.Launcher
-            Profile          = $lastPlayed.Profile
-            ProfileName      = $lastPlayed.Profile
-            Version          = $lastPlayed.Version
-            Path             = $lastPlayed.Path
-            LogFile          = $lastPlayed.LogFile
-            LastPlayed       = $lastPlayed.LastPlayed.ToString("yyyy-MM-dd HH:mm:ss")
-            LastPlayedTime   = $lastPlayed.LastPlayed.ToString("yyyy-MM-dd HH:mm:ss")
-            ConnectedServers = $connectedServers
+        if ($lastPlayed.ConnectedServers.Count -gt 0) {
+            Write-Alert -Level "INFO" -Message "Connected servers identified in target session" -Detail ($lastPlayed.ConnectedServers -join ", ")
         }
 
-        # Deep scan all installed mods in this active instance
-        Scan-InstanceMods -InstancePath $lastPlayed.Path -ProfileName $lastPlayed.Profile
+        if ($lastPlayed.FlaggedModsCount -gt 0) {
+            Write-Alert -Level "FLAG" -Message "$($lastPlayed.FlaggedModsCount) cheat/disallowed mod(s) in active profile" -Detail "Profile: $($lastPlayed.Profile)"
+        } else {
+            Write-Alert -Level "OK" -Message "All $($lastPlayed.TotalModsCount) mods passed integrity scan" -Detail "Profile: $($lastPlayed.Profile)"
+        }
     } else {
         Write-Alert -Level "WARN" -Message "Could not detect any Minecraft launchers or instance profiles." -Detail "Minecraft may be installed on a non-standard drive or launched as portable."
     }
@@ -645,102 +1177,9 @@ function Scan-InstanceMods {
         [string]$InstancePath,
         [string]$ProfileName
     )
-
-    if (-not $InstancePath -or -not (Test-Path $InstancePath)) { return }
-    $modsFolder = Join-Path $InstancePath "mods"
-    if (-not (Test-Path $modsFolder)) { return }
-
-    Write-Alert -Level "INFO" -Message "Deep scanning installed mods in active profile" -Detail "$modsFolder"
-
-    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
-
-    $modFiles = Get-ChildItem -Path $modsFolder -File -Filter "*.jar" -ErrorAction SilentlyContinue | Sort-Object Name
-    $activeMods = [System.Collections.Generic.List[PSCustomObject]]::new()
-    $flaggedCount = 0
-
-    foreach ($mod in $modFiles) {
-        $isFlagged = $false
-        $reason = "Clean"
-        $category = "CLEAN"
-        $displayName = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
-
-        # 1. Filename pattern matching
-        foreach ($sig in $Global:CheatSignatures) {
-            if ($mod.Name -match "(?i)$sig") {
-                $isFlagged = $true
-                $category = "FLAGGED CHEAT / DISALLOWED"
-                $reason = "Matches cheat / disallowed signature: $sig"
-                break
-            }
-        }
-
-        # 2. Deep inspection inside JAR
-        if (-not $isFlagged) {
-            try {
-                $zip = [System.IO.Compression.ZipFile]::OpenRead($mod.FullName)
-
-                # Check fabric.mod.json / quilt.mod.json / mcmod.info
-                $metaEntry = $zip.GetEntry("fabric.mod.json")
-                if (-not $metaEntry) { $metaEntry = $zip.GetEntry("quilt.mod.json") }
-                if (-not $metaEntry) { $metaEntry = $zip.GetEntry("mcmod.info") }
-
-                if ($metaEntry) {
-                    $stream = $metaEntry.Open()
-                    $reader = [System.IO.StreamReader]::new($stream)
-                    $metaContent = $reader.ReadToEnd()
-                    $reader.Close()
-                    $stream.Close()
-
-                    foreach ($sig in $Global:CheatSignatures) {
-                        if ($metaContent -match "(?i)`"id`"\s*:\s*`"[^`"]*$sig" -or $metaContent -match "(?i)`"name`"\s*:\s*`"[^`"]*$sig") {
-                            $isFlagged = $true
-                            $category = "FLAGGED CHEAT / DISALLOWED"
-                            $reason = "Internal metadata matches signature: $sig"
-                            break
-                        }
-                    }
-                }
-
-                # Check class package entries
-                if (-not $isFlagged) {
-                    foreach ($entry in $zip.Entries) {
-                        $eName = $entry.FullName.ToLower()
-                        if ($eName -match "wurstclient" -or $eName -match "meteordevelopment" -or $eName -match "vape" -or $eName -match "crystaloptimizer" -or $eName -match "anchoroptimizer" -or $eName -match "autoclicker") {
-                            $isFlagged = $true
-                            $category = "FLAGGED CHEAT / DISALLOWED"
-                            $reason = "Internal package contains cheat class: $($entry.FullName)"
-                            break
-                        }
-                    }
-                }
-
-                $zip.Dispose()
-            } catch {}
-        }
-
-        if ($isFlagged) {
-            $flaggedCount++
-            Write-Alert -Level "FLAG" -Message "SUSPICIOUS OR CHEAT MOD DETECTED IN ACTIVE INSTANCE!" -Detail "$($mod.Name) ($reason)"
-        }
-
-        $activeMods.Add([PSCustomObject]@{
-            Name          = $displayName
-            FileName      = $mod.Name
-            FullPath      = $mod.FullName
-            SizeKB        = [math]::Round($mod.Length / 1KB, 1)
-            LastWriteTime = $mod.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
-            IsFlagged     = $isFlagged
-            Category      = $category
-            Reason        = $reason
-        })
-    }
-
-    $Global:ReportData.ActiveInstanceMods = $activeMods
-    if ($flaggedCount -gt 0) {
-        Write-Alert -Level "FLAG" -Message "$flaggedCount cheat/disallowed mod(s) found in active profile" -Detail "Profile: $ProfileName"
-    } else {
-        Write-Alert -Level "OK" -Message "All $($activeMods.Count) installed mods passed initial integrity scan" -Detail "Profile: $ProfileName"
-    }
+    $res = Analyze-InstanceMods -InstancePath $InstancePath -ProfileName $ProfileName
+    $Global:ReportData.ActiveInstanceMods = $res.Mods
+    return $res
 }
 
 
@@ -1420,7 +1859,7 @@ function Export-Report {
 
 <#
     Gricko SS Tool - Minimalist Ocean-Style Automated Screenshare GUI
-    Compact Floating Window with Fishbone Logo, Deep Scan, Clean Results & Full Mods Browser
+    Compact Floating Window with Fishbone Logo, Deep Multi-Instance Scan, Dynamic Client/Instance Selector & Full Mods Browser
 #>
 
 function Show-GrickoGui {
@@ -1479,6 +1918,34 @@ function Show-GrickoGui {
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#161822"/>
+            <Setter Property="Foreground" Value="#F8FAFC"/>
+            <Setter Property="BorderBrush" Value="#2E344A"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+        </Style>
+
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="#161822"/>
+            <Setter Property="Foreground" Value="#F8FAFC"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Background" Value="#2E1C48"/>
+                    <Setter Property="Foreground" Value="#C084FC"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#3B2667"/>
+                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
 
@@ -1547,14 +2014,14 @@ function Show-GrickoGui {
                         </Button.Template>
                     </Button>
 
-                    <TextBlock Text="2-Minute Deep PC &amp; All Mods Analysis" Foreground="#475569" FontSize="10.5" HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                    <TextBlock Text="Deep PC, Multi-Client &amp; All Mods Analysis" Foreground="#475569" FontSize="10.5" HorizontalAlignment="Center" Margin="0,14,0,0"/>
                 </StackPanel>
 
                 <!-- VIEW 2: 2-MINUTE PROGRESS SCAN -->
                 <StackPanel Name="ProgressView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440">
                     <Image Name="LogoImgProgress" Width="120" Height="58" HorizontalAlignment="Center" Margin="0,0,0,12" RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock Text="DEEP SCANNING SYSTEM" Foreground="#F8FAFC" FontSize="17" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,2"/>
-                    <TextBlock Text="Thorough inspection of memory, prefetch, BAM &amp; all mods" Foreground="#64748B" FontSize="11" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+                    <TextBlock Text="Analyzing all Minecraft clients, instances, memory &amp; mods" Foreground="#64748B" FontSize="11" HorizontalAlignment="Center" Margin="0,0,0,20"/>
 
                     <Border CornerRadius="8" Height="14" Background="#1B1D26" Margin="0,0,0,12" ClipToBounds="True">
                         <ProgressBar Name="ScanProgress" Height="14" Minimum="0" Maximum="100" Value="0" Background="Transparent" BorderThickness="0">
@@ -1571,19 +2038,23 @@ function Show-GrickoGui {
                 </StackPanel>
 
                 <!-- VIEW 3: RESULTS SUMMARY -->
-                <StackPanel Name="ResultsView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Width="470">
+                <StackPanel Name="ResultsView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480">
                     <Image Name="LogoImgResults" Width="110" Height="54" HorizontalAlignment="Center" Margin="0,0,0,8" RenderOptions.BitmapScalingMode="HighQuality"/>
                     
                     <TextBlock Name="TxtResultTitle" Text="Scan Complete" Foreground="#F8FAFC" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,2"/>
-                    <TextBlock Name="TxtResultSubtitle" Text="System inspection finished" Foreground="#34D399" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                    <TextBlock Name="TxtResultSubtitle" Text="System &amp; client inspection finished" Foreground="#34D399" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
 
-                    <!-- Client & Last Instance Info Card -->
+                    <!-- Client & Instance Info Card with Dynamic Selector -->
                     <Border Background="#161822" CornerRadius="8" BorderBrush="#25293A" BorderThickness="1" Padding="14,10" Margin="0,0,0,10">
                         <StackPanel>
-                            <DockPanel Margin="0,0,0,4">
-                                <TextBlock Text="ACTIVE / LAST PLAYED MINECRAFT CLIENT" Foreground="#94A3B8" FontSize="10.5" FontWeight="Bold"/>
-                                <TextBlock Name="TxtResultTime" Text="N/A" Foreground="#38BDF8" FontSize="10.5" FontWeight="Bold" HorizontalAlignment="Right"/>
+                            <DockPanel Margin="0,0,0,5">
+                                <TextBlock Text="TARGET CLIENT &amp; INSTANCE" Foreground="#94A3B8" FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <TextBlock Name="TxtResultTime" Text="N/A" Foreground="#38BDF8" FontSize="10.5" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                             </DockPanel>
+
+                            <!-- Client / Instance Selector Dropdown -->
+                            <ComboBox Name="CmbResultInstance" Margin="0,2,0,6" Cursor="Hand"/>
+
                             <TextBlock Name="TxtResultClient" Text="Client   : Detecting..." Foreground="#E2E8F0" FontSize="12" FontWeight="SemiBold" Margin="0,1"/>
                             <TextBlock Name="TxtResultProfile" Text="Profile  : Standard" Foreground="#94A3B8" FontSize="11" Margin="0,1"/>
                             <TextBlock Name="TxtResultServer" Text="Server   : None" Foreground="#38BDF8" FontSize="11" Margin="0,1"/>
@@ -1591,7 +2062,7 @@ function Show-GrickoGui {
                     </Border>
 
                     <!-- Cheat & Mod Detection Result Box -->
-                    <Border Name="DetectionBox" Background="#161822" CornerRadius="8" BorderBrush="#25293A" BorderThickness="1" Padding="14,8" Margin="0,0,0,14">
+                    <Border Name="DetectionBox" Background="#161822" CornerRadius="8" BorderBrush="#25293A" BorderThickness="1" Padding="14,8" Margin="0,0,0,12">
                         <StackPanel HorizontalAlignment="Center">
                             <TextBlock Name="TxtDetectionsBadge" Text="[OK] No Cheats or Suspicious Clients Detected" Foreground="#34D399" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
                             <TextBlock Name="TxtCheatList" Text="" Foreground="#F87171" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,3,0,0" Visibility="Collapsed"/>
@@ -1625,27 +2096,36 @@ function Show-GrickoGui {
                 </StackPanel>
 
                 <!-- VIEW 4: CLEAN DETAILS VIEW -->
-                <Grid Name="DetailsView" Visibility="Collapsed" Height="360" Margin="4,0">
+                <Grid Name="DetailsView" Visibility="Collapsed" Height="365" Margin="4,0">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                    <DockPanel Grid.Row="0" Margin="0,0,0,6">
                         <TextBlock Text="FORENSIC INSPECTION DETAILS" Foreground="#F8FAFC" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
                         <Button Name="BtnBackFromDetails" Content="&lt;- Back" Background="Transparent" Foreground="#38BDF8" BorderThickness="0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" HorizontalAlignment="Right"/>
                     </DockPanel>
 
-                    <Border Grid.Row="1" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="12">
+                    <!-- Client & Instance Chooser in Details -->
+                    <Border Grid.Row="1" Background="#161822" CornerRadius="6" BorderBrush="#25293A" BorderThickness="1" Padding="8,4" Margin="0,0,0,6">
+                        <DockPanel>
+                            <TextBlock Text="TARGET INSTANCE:" Foreground="#818CF8" FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox Name="CmbDetailsInstance" Cursor="Hand"/>
+                        </DockPanel>
+                    </Border>
+
+                    <Border Grid.Row="2" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="12">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Name="DetailsContentPanel">
-                                <!-- Populated dynamically -->
+                                <!-- Populated dynamically based on selected client/instance -->
                             </StackPanel>
                         </ScrollViewer>
                     </Border>
 
-                    <DockPanel Grid.Row="2" Margin="0,8,0,0">
+                    <DockPanel Grid.Row="3" Margin="0,6,0,0">
                         <TextBlock Name="TxtSummaryStats" Text="Clean Forensics" Foreground="#64748B" FontSize="11" VerticalAlignment="Center"/>
                         <Button Name="BtnExportJson" Content="Export Full JSON" Height="26" Padding="12,0" Background="#1A1D27" Foreground="#C084FC" BorderThickness="0" FontSize="11" FontWeight="SemiBold" Cursor="Hand" HorizontalAlignment="Right">
                             <Button.Resources>
@@ -1658,8 +2138,9 @@ function Show-GrickoGui {
                 </Grid>
 
                 <!-- VIEW 5: ALL INSTALLED MODS BROWSER -->
-                <Grid Name="ModsView" Visibility="Collapsed" Height="360" Margin="4,0">
+                <Grid Name="ModsView" Visibility="Collapsed" Height="365" Margin="4,0">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
@@ -1674,8 +2155,16 @@ function Show-GrickoGui {
                         <Button Name="BtnBackFromMods" Content="&lt;- Back" Background="Transparent" Foreground="#38BDF8" BorderThickness="0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </DockPanel>
 
+                    <!-- Client & Instance Switcher in Mods View -->
+                    <Border Grid.Row="1" Background="#161822" CornerRadius="6" BorderBrush="#25293A" BorderThickness="1" Padding="8,3" Margin="0,0,0,6">
+                        <DockPanel>
+                            <TextBlock Text="INSTANCE:" Foreground="#818CF8" FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox Name="CmbModsInstance" Cursor="Hand"/>
+                        </DockPanel>
+                    </Border>
+
                     <!-- Filter / Search Box -->
-                    <Border Grid.Row="1" Background="#161822" CornerRadius="6" BorderBrush="#262A38" BorderThickness="1" Padding="10,4" Margin="0,0,0,8">
+                    <Border Grid.Row="2" Background="#161822" CornerRadius="6" BorderBrush="#262A38" BorderThickness="1" Padding="10,4" Margin="0,0,0,6">
                         <DockPanel>
                             <TextBlock Text="Search:" Foreground="#64748B" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox Name="TxtModSearch" Background="Transparent" Foreground="#F1F5F9" BorderThickness="0" FontSize="11.5" VerticalAlignment="Center"/>
@@ -1683,7 +2172,7 @@ function Show-GrickoGui {
                     </Border>
 
                     <!-- Mods List ScrollViewer -->
-                    <Border Grid.Row="2" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="8">
+                    <Border Grid.Row="3" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="8">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Name="ModsListPanel">
                                 <!-- Populated dynamically with clean mod cards -->
@@ -1691,7 +2180,7 @@ function Show-GrickoGui {
                         </ScrollViewer>
                     </Border>
 
-                    <DockPanel Grid.Row="3" Margin="0,6,0,0">
+                    <DockPanel Grid.Row="4" Margin="0,6,0,0">
                         <TextBlock Name="TxtModsSummaryStats" Text="0 Mods Installed" Foreground="#64748B" FontSize="11" VerticalAlignment="Center"/>
                         <TextBlock Name="TxtModsFlaggedCount" Text="" Foreground="#EF4444" FontSize="11" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </DockPanel>
@@ -1746,6 +2235,10 @@ function Show-GrickoGui {
     $txtResultProfile  = $window.FindName("TxtResultProfile")
     $txtResultServer   = $window.FindName("TxtResultServer")
 
+    $cmbResultInstance = $window.FindName("CmbResultInstance")
+    $cmbDetailsInstance= $window.FindName("CmbDetailsInstance")
+    $cmbModsInstance   = $window.FindName("CmbModsInstance")
+
     $detectionBox      = $window.FindName("DetectionBox")
     $txtDetectionsBadge= $window.FindName("TxtDetectionsBadge")
     $txtCheatList      = $window.FindName("TxtCheatList")
@@ -1768,7 +2261,7 @@ function Show-GrickoGui {
         $logoImgResults.Source = $logoSrc
     }
 
-    # FREE WINDOW DRAGGING FROM ANYWHERE
+    # Free Window Dragging
     $dragAction = {
         param($sender, $e)
         if ($e.LeftButton -eq [System.Windows.Input.MouseButtonState]::Pressed) {
@@ -1849,7 +2342,7 @@ function Show-GrickoGui {
         $tbLbl.Text = $Label
         $tbLbl.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#64748B")
         $tbLbl.FontWeight = [System.Windows.FontWeights]::Bold
-        $tbLbl.Width = 90
+        $tbLbl.Width = 95
         $tbLbl.FontSize = 11.5
         [System.Windows.Controls.DockPanel]::SetDock($tbLbl, [System.Windows.Controls.Dock]::Left)
         $sp.Children.Add($tbLbl) | Out-Null
@@ -1871,42 +2364,42 @@ function Show-GrickoGui {
 
         $mods = $Global:ReportData.ActiveInstanceMods
         if (-not $mods -or $mods.Count -eq 0) {
-            $tbNone = [System.Windows.Controls.TextBlock]::new()
-            $tbNone.Text = "No mods found in the active Minecraft profile."
-            $tbNone.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#94A3B8")
-            $tbNone.FontSize = 12
-            $tbNone.Margin = [System.Windows.Thickness]::new(8, 12, 8, 8)
-            $modsListPanel.Children.Add($tbNone) | Out-Null
+            $tbEmpty = [System.Windows.Controls.TextBlock]::new()
+            $tbEmpty.Text = "No mods found for this instance."
+            $tbEmpty.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#64748B")
+            $tbEmpty.FontSize = 11.5
+            $tbEmpty.HorizontalAlignment = [System.Windows.HorizontalAlignment]::Center
+            $tbEmpty.Margin = [System.Windows.Thickness]::new(0, 30, 0, 0)
+            $modsListPanel.Children.Add($tbEmpty) | Out-Null
             return
         }
 
-        # Sort flagged mods first, then alphabetically
-        $sortedMods = $mods | Sort-Object { if ($_.IsFlagged) { 0 } else { 1 } }, Name
+        $filteredMods = if ($Filter) {
+            $mods | Where-Object { $_.Name -like "*$Filter*" -or $_.FileName -like "*$Filter*" -or $_.Reason -like "*$Filter*" }
+        } else {
+            $mods
+        }
+
+        # Sort: Known cheats first, then AI-flagged by risk score, then low-risk, then clean alphabetical
+        $sortedMods = $filteredMods | Sort-Object -Property @{
+            Expression = {
+                if ($_.IsFlagged -and $_.Category -notlike "*HEURISTIC*") { 3 }
+                elseif ($_.Category -like "*HEURISTIC*") { 2 }
+                elseif ($_.Category -like "*LOW RISK*") { 1 }
+                else { 0 }
+            }; Descending = $true
+        }, @{ Expression = { if ($_.AIRiskScore) { $_.AIRiskScore } else { 0 } }; Descending = $true },
+           @{ Expression = { $_.Name }; Descending = $false }
+
 
         foreach ($mod in $sortedMods) {
-            if ($Filter) {
-                $matchesFilter = ($mod.Name -like "*$Filter*") -or ($mod.FileName -like "*$Filter*") -or ($mod.Reason -like "*$Filter*")
-                if (-not $matchesFilter) { continue }
-            }
-
             $card = [System.Windows.Controls.Border]::new()
             $card.CornerRadius = [System.Windows.CornerRadius]::new(6)
-            $card.Margin = [System.Windows.Thickness]::new(0, 0, 0, 6)
             $card.Padding = [System.Windows.Thickness]::new(10, 8, 10, 8)
+            $card.Margin = [System.Windows.Thickness]::new(0, 0, 0, 6)
 
             $cardStack = [System.Windows.Controls.StackPanel]::new()
-
             $headerDock = [System.Windows.Controls.DockPanel]::new()
-            $headerDock.Margin = [System.Windows.Thickness]::new(0, 0, 0, 2)
-
-            $badge = [System.Windows.Controls.Border]::new()
-            $badge.CornerRadius = [System.Windows.CornerRadius]::new(4)
-            $badge.Padding = [System.Windows.Thickness]::new(6, 1, 6, 1)
-            [System.Windows.Controls.DockPanel]::SetDock($badge, [System.Windows.Controls.Dock]::Right)
-
-            $tbBadge = [System.Windows.Controls.TextBlock]::new()
-            $tbBadge.FontSize = 10
-            $tbBadge.FontWeight = [System.Windows.FontWeights]::Bold
 
             $tbName = [System.Windows.Controls.TextBlock]::new()
             $tbName.Text = $mod.FileName
@@ -1914,22 +2407,56 @@ function Show-GrickoGui {
             $tbName.FontWeight = [System.Windows.FontWeights]::SemiBold
             $tbName.TextTrimming = [System.Windows.TextTrimming]::CharacterEllipsis
 
-            if ($mod.IsFlagged) {
-                $card.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#2A1218")
-                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#991B1B")
+            $badge = [System.Windows.Controls.Border]::new()
+            $badge.CornerRadius = [System.Windows.CornerRadius]::new(4)
+            $badge.Padding = [System.Windows.Thickness]::new(6, 1, 6, 1)
+            [System.Windows.Controls.DockPanel]::SetDock($badge, [System.Windows.Controls.Dock]::Right)
+
+            $tbBadge = [System.Windows.Controls.TextBlock]::new()
+            $tbBadge.FontSize = 9.5
+            $tbBadge.FontWeight = [System.Windows.FontWeights]::Bold
+
+            $isAiHeuristic  = ($mod.Category -like "*HEURISTIC*")
+            $isLowRisk      = ($mod.Category -like "*LOW RISK*")
+
+            if ($mod.IsFlagged -and -not $isAiHeuristic) {
+                # Known cheat signature — Red
+                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#2A1215")
+                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7F1D1D")
                 $card.BorderThickness = [System.Windows.Thickness]::new(1)
-                $badge.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7F1D1D")
-                $tbBadge.Text = "SUSPICIOUS / CHEAT"
+                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7F1D1D")
+                $tbBadge.Text      = "KNOWN CHEAT"
                 $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FCA5A5")
-                $tbName.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
+                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
+            } elseif ($isAiHeuristic) {
+                # AI heuristic risk — Orange
+                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#271810")
+                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#92400E")
+                $card.BorderThickness = [System.Windows.Thickness]::new(1)
+                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#92400E")
+                $riskScore = if ($mod.AIRiskScore) { " ($($mod.AIRiskScore)/99)" } else { "" }
+                $tbBadge.Text      = "AI RISK$riskScore"
+                $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FCD34D")
+                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FB923C")
+            } elseif ($isLowRisk) {
+                # Low risk / review — Yellow
+                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#1C1900")
+                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#713F12")
+                $card.BorderThickness = [System.Windows.Thickness]::new(1)
+                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#713F12")
+                $riskScore = if ($mod.AIRiskScore) { " ($($mod.AIRiskScore)/99)" } else { "" }
+                $tbBadge.Text      = "REVIEW$riskScore"
+                $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FEF08A")
+                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#EAB308")
             } else {
-                $card.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#131620")
+                # Clean — Green
+                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#131620")
                 $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#1E2330")
                 $card.BorderThickness = [System.Windows.Thickness]::new(1)
-                $badge.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#064E3B")
-                $tbBadge.Text = "CLEAN"
+                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#064E3B")
+                $tbBadge.Text      = "CLEAN"
                 $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#6EE7B7")
-                $tbName.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#E2E8F0")
+                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#E2E8F0")
             }
 
             $badge.Child = $tbBadge
@@ -1937,13 +2464,27 @@ function Show-GrickoGui {
             $headerDock.Children.Add($tbName) | Out-Null
             $cardStack.Children.Add($headerDock) | Out-Null
 
-            if ($mod.IsFlagged) {
+            if ($mod.IsFlagged -or $isAiHeuristic -or $isLowRisk) {
                 $tbReason = [System.Windows.Controls.TextBlock]::new()
-                $tbReason.Text = "[!] " + $mod.Reason
-                $tbReason.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FBBF24")
+                $prefix = if ($mod.IsFlagged -and -not $isAiHeuristic) { "[!] " } elseif ($isAiHeuristic) { "[AI] " } else { "[?] " }
+                $tbReason.Text = $prefix + $mod.Reason
+                $reasonColor = if ($mod.IsFlagged -and -not $isAiHeuristic) { "#FBBF24" } elseif ($isAiHeuristic) { "#FB923C" } else { "#EAB308" }
+                $tbReason.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($reasonColor)
                 $tbReason.FontSize = 10.5
-                $tbReason.Margin = [System.Windows.Thickness]::new(0, 2, 0, 2)
+                $tbReason.TextWrapping = [System.Windows.TextWrapping]::Wrap
+                $tbReason.Margin = [System.Windows.Thickness]::new(0, 2, 0, 1)
                 $cardStack.Children.Add($tbReason) | Out-Null
+
+                # Show additional AI analysis details if present
+                if ($mod.AIDetails -and $mod.AIDetails.Length -gt 0) {
+                    $tbAI = [System.Windows.Controls.TextBlock]::new()
+                    $tbAI.Text = "AI Analysis: " + $mod.AIDetails
+                    $tbAI.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#94A3B8")
+                    $tbAI.FontSize = 10
+                    $tbAI.TextWrapping = [System.Windows.TextWrapping]::Wrap
+                    $tbAI.Margin = [System.Windows.Thickness]::new(0, 1, 0, 1)
+                    $cardStack.Children.Add($tbAI) | Out-Null
+                }
             }
 
             $tbMeta = [System.Windows.Controls.TextBlock]::new()
@@ -1962,7 +2503,129 @@ function Show-GrickoGui {
         Render-ModsList -Filter $txtModSearch.Text.Trim()
     })
 
-    # 2-Minute Deep Scan Runner
+    # Render Forensic Details for Chosen Instance
+    $script:cachedActualCheats = @()
+
+    function Render-DetailsForInstance {
+        param([PSCustomObject]$inst)
+
+        $detailsContentPanel.Children.Clear()
+        if (-not $inst) { return }
+
+        Add-CleanSectionHeader "CHOSEN MINECRAFT INSTANCE & SESSION"
+        Add-CleanRow "Client"   $inst.Launcher "#38BDF8"
+        Add-CleanRow "Profile"  $inst.Profile "#E2E8F0"
+        if ($inst.Version) { Add-CleanRow "Version"  $inst.Version "#E2E8F0" }
+        Add-CleanRow "Played"   $inst.LastPlayedTime "#34D399"
+        Add-CleanRow "Path"     $inst.Path "#94A3B8"
+        if ($inst.ConnectedServers -and $inst.ConnectedServers.Count -gt 0) {
+            Add-CleanRow "Server"   ($inst.ConnectedServers -join ", ") "#38BDF8"
+        } else {
+            Add-CleanRow "Server"   "Singleplayer / Unrecorded" "#64748B"
+        }
+
+        if ($inst.IsLogWiped) {
+            Add-CleanRow "Log File" "LOG WAS WIPED / 0 BYTES (ALERT!)" "#EF4444"
+        } elseif ($inst.SuspiciousLog -and $inst.SuspiciousLog.Count -gt 0) {
+            Add-CleanRow "Log Hits" "$($inst.SuspiciousLog.Count) suspicious lines identified" "#FBBF24"
+        } else {
+            Add-CleanRow "Log Status" "Normal session log integrity" "#34D399"
+        }
+
+        Add-CleanSectionHeader "INSTANCE MODS ($($inst.TotalModsCount) TOTAL)"
+        Add-CleanRow "Installed" "$($inst.TotalModsCount) mod jar(s) in profile" "#38BDF8"
+        if ($inst.FlaggedModsCount -gt 0) {
+            Add-CleanRow "Suspicious" "$($inst.FlaggedModsCount) cheat mod(s) flagged!" "#EF4444"
+            foreach ($fm in $inst.FlaggedMods) {
+                Add-CleanRow " - Flagged" "$($fm.FileName) ($($fm.Reason))" "#FBBF24"
+            }
+        } else {
+            Add-CleanRow "Integrity" "All $($inst.TotalModsCount) mods passed integrity scan" "#34D399"
+        }
+
+        # Summary of All Other Discovered Instances on PC
+        if ($Global:ReportData.AllInstances -and $Global:ReportData.AllInstances.Count -gt 1) {
+            Add-CleanSectionHeader "ALL DISCOVERED CLIENTS & PROFILES ($($Global:ReportData.AllInstances.Count) TOTAL)"
+            foreach ($other in $Global:ReportData.AllInstances) {
+                $stColor = if ($other.FlaggedModsCount -gt 0) { "#EF4444" } else { "#34D399" }
+                $stDesc = if ($other.FlaggedModsCount -gt 0) { "[!] $($other.FlaggedModsCount) CHEAT MODS | $($other.TotalModsCount) mods" } else { "Clean ($($other.TotalModsCount) mods)" }
+                Add-CleanRow "[$($other.Launcher)]" "$($other.Profile) -> $stDesc" $stColor
+            }
+        }
+
+        # Global Cheat & Suspicious Artifacts (Prefetch, BAM, and flagged files)
+        Add-CleanSectionHeader "SYSTEM CHEAT & SUSPICIOUS ARTIFACTS"
+        if ($script:cachedActualCheats.Count -gt 0) {
+            $shownFiles = @()
+            foreach ($c in $script:cachedActualCheats) {
+                if ($c.File -notin $shownFiles) {
+                    $shownFiles += $c.File
+                    Add-CleanRow "File"     $c.File "#EF4444"
+                    if ($c.Path) { Add-CleanRow "Location" $c.Path "#94A3B8" }
+                    if ($c.Time) { Add-CleanRow "Activity" "Executed / Modified $c.Time" "#FBBF24" }
+                }
+            }
+        } else {
+            Add-CleanRow "Status" "Clean: No cheat files or blacklisted loaders detected on this PC." "#34D399"
+        }
+    }
+
+    # Synchronize Active Instance across Results, Details, and Mods Views
+    $script:isSyncingInstance = $false
+
+    function Sync-SelectedInstance([int]$idx) {
+        if ($script:isSyncingInstance) { return }
+        if (-not $Global:ReportData.AllInstances -or $idx -lt 0 -or $idx -ge $Global:ReportData.AllInstances.Count) { return }
+
+        $script:isSyncingInstance = $true
+        try {
+            $targetInst = $Global:ReportData.AllInstances[$idx]
+            $Global:ReportData.LastPlayedInstance = $targetInst
+            $Global:ReportData.ActiveInstanceMods = $targetInst.Mods
+
+            # Sync Dropdown controls
+            if ($cmbResultInstance.SelectedIndex -ne $idx) { $cmbResultInstance.SelectedIndex = $idx }
+            if ($cmbDetailsInstance.SelectedIndex -ne $idx) { $cmbDetailsInstance.SelectedIndex = $idx }
+            if ($cmbModsInstance.SelectedIndex -ne $idx) { $cmbModsInstance.SelectedIndex = $idx }
+
+            # Update Results Card
+            $txtResultTime.Text = if ($targetInst.LastPlayedTime) { "$($targetInst.LastPlayedTime)" } else { "Historical" }
+            $txtResultClient.Text = "Client   : $($targetInst.Launcher)"
+            $verDisplay = if ($targetInst.Version) { " ($($targetInst.Version))" } else { "" }
+            $txtResultProfile.Text = "Profile  : $($targetInst.Profile)$verDisplay"
+            if ($targetInst.ConnectedServers -and $targetInst.ConnectedServers.Count -gt 0) {
+                $txtResultServer.Text = "Server   : $($targetInst.ConnectedServers -join ', ')"
+            } else {
+                $txtResultServer.Text = "Server   : Singleplayer / Unrecorded"
+            }
+
+            # Update Mods Button & View
+            $btnMods.Content = "ALL MODS ($($targetInst.TotalModsCount))"
+            $txtModsTitle.Text = "INSTALLED MODS ($($targetInst.TotalModsCount))"
+            $txtModsSubtitle.Text = "[$($targetInst.Launcher)] $($targetInst.Profile)"
+            $txtModsSummaryStats.Text = "$($targetInst.TotalModsCount) mods in $($targetInst.Profile)"
+            if ($targetInst.FlaggedModsCount -gt 0) {
+                $txtModsFlaggedCount.Text = "[!] $($targetInst.FlaggedModsCount) Flagged Suspicious"
+                $txtModsFlaggedCount.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#EF4444")
+            } else {
+                $txtModsFlaggedCount.Text = "[OK] All Mods Clean"
+                $txtModsFlaggedCount.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#34D399")
+            }
+            Render-ModsList -Filter $txtModSearch.Text.Trim()
+
+            # Update Details Panel
+            Render-DetailsForInstance -inst $targetInst
+        } finally {
+            $script:isSyncingInstance = $false
+        }
+    }
+
+    # Hook ComboBox selection events
+    $cmbResultInstance.Add_SelectionChanged({ Sync-SelectedInstance $cmbResultInstance.SelectedIndex })
+    $cmbDetailsInstance.Add_SelectionChanged({ Sync-SelectedInstance $cmbDetailsInstance.SelectedIndex })
+    $cmbModsInstance.Add_SelectionChanged({ Sync-SelectedInstance $cmbModsInstance.SelectedIndex })
+
+    # Deep Scan Runner
     $btnScan.Add_Click({
         $homeView.Visibility = [System.Windows.Visibility]::Collapsed
         $progressView.Visibility = [System.Windows.Visibility]::Visible
@@ -1977,6 +2640,7 @@ function Show-GrickoGui {
         $Global:ReportData.CheatClients = @()
         $Global:ReportData.LegitClients = @()
         $Global:ReportData.ActiveInstanceMods = @()
+        $Global:ReportData.AllInstances = @()
 
         # Step 1: Memory & Active Process Inspection (0% to 15% - ~18s)
         for ($pct = 1; $pct -le 15; $pct++) {
@@ -1992,7 +2656,7 @@ function Show-GrickoGui {
         Scan-LastPlayedInstance
         for ($pct = 16; $pct -le 35; $pct++) {
             $scanProgress.Value = $pct
-            $txtProgressStatus.Text = "Deep scanning Minecraft instances & all installed mods... - $pct%"
+            $txtProgressStatus.Text = "Deep scanning all Minecraft clients & instances... - $pct%"
             Pump-WpfEvents
             Start-Sleep -Milliseconds 1200
         }
@@ -2037,55 +2701,7 @@ function Show-GrickoGui {
             Start-Sleep -Milliseconds 1200
         }
 
-        # Format Clean Results
-        $inst = $Global:ReportData.LastPlayedInstance
-        $timeStr = $null
-        $launcherStr = $null
-        $profileStr = "Standard Profile"
-        $versionStr = ""
-
-        if ($inst) {
-            $timeStr = if ($inst.LastPlayedTime) { $inst.LastPlayedTime } elseif ($inst.LastPlayed) { $inst.LastPlayed } else { $null }
-            $launcherStr = if ($inst.LauncherName) { $inst.LauncherName } elseif ($inst.Launcher) { $inst.Launcher } else { $null }
-            $profileStr = if ($inst.ProfileName) { $inst.ProfileName } elseif ($inst.Profile) { $inst.Profile } else { "Standard Profile" }
-            $versionStr = if ($inst.Version) { $inst.Version } else { "" }
-        }
-
-        # Fallback 1: Active running Java/Minecraft process
-        if (-not $launcherStr -and $Global:ReportData.JavaProcesses -and $Global:ReportData.JavaProcesses.Count -gt 0) {
-            $jp = $Global:ReportData.JavaProcesses[0]
-            $launcherStr = "Active Java (PID $($jp.ProcessId))"
-            $timeStr = "Running Right Now"
-            $profileStr = "Active Game Session"
-        }
-
-        # Fallback 2: Check any prefetch/BAM traces
-        if (-not $launcherStr) {
-            $pfMatch = $Global:Findings | Where-Object { $_.Detail -like "*javaw.exe*" -or $_.Detail -like "*minecraft.exe*" -or $_.Detail -like "*lunar*" -or $_.Detail -like "*feather*" -or $_.Detail -like "*badlion*" } | Select-Object -First 1
-            if ($pfMatch) {
-                $launcherStr = "Minecraft (Prefetch / BAM Trace)"
-                $timeStr = "Recent Execution Trace"
-                $profileStr = "Historical Instance"
-            }
-        }
-
-        if ($launcherStr) {
-            $txtResultTime.Text = if ($timeStr) { "$timeStr" } else { "Active / Recent" }
-            $txtResultClient.Text = "Client   : $launcherStr"
-            $txtResultProfile.Text = if ($versionStr -and $versionStr -ne "Unknown") { "Profile  : $profileStr ($versionStr)" } else { "Profile  : $profileStr" }
-            if ($inst -and $inst.ConnectedServers -and $inst.ConnectedServers.Count -gt 0) {
-                $txtResultServer.Text = "Server   : $($inst.ConnectedServers -join ', ')"
-            } else {
-                $txtResultServer.Text = "Server   : Singleplayer / Unrecorded"
-            }
-        } else {
-            $txtResultTime.Text = "No Instance Found"
-            $txtResultClient.Text = "Client   : No Minecraft installation detected"
-            $txtResultProfile.Text = "Profile  : N/A"
-            $txtResultServer.Text = "Server   : N/A"
-        }
-
-        # Filter actual cheat detections (Prestige, Grim, Vape, Drip, Slinky, Raven, Crystal/Anchor Optimizers, etc.)
+        # Collect all system-level cheat detections (Prefetch, BAM, FileSystem, etc.)
         $actualCheats = [System.Collections.Generic.List[PSCustomObject]]::new()
         foreach ($f in $Global:Findings) {
             if ($f.Level -eq "FLAG") {
@@ -2124,75 +2740,58 @@ function Show-GrickoGui {
             }
         }
 
-        # Also add any flagged mods from the active instance to the cheats list
-        $activeMods = $Global:ReportData.ActiveInstanceMods
-        $flaggedMods = $activeMods | Where-Object { $_.IsFlagged }
-        foreach ($fm in $flaggedMods) {
-            $actualCheats.Add([PSCustomObject]@{
-                File   = $fm.FileName
-                Path   = $fm.FullPath
-                Time   = $fm.LastWriteTime
-                Reason = $fm.Reason
-            })
-        }
-
-        # Update Mods Button Count & Subtitles
-        $totalModCount = if ($activeMods) { $activeMods.Count } else { 0 }
-        $flaggedModCount = if ($flaggedMods) { $flaggedMods.Count } else { 0 }
-        $btnMods.Content = "ALL MODS ($totalModCount)"
-        $txtModsTitle.Text = "INSTALLED MODS ($totalModCount)"
-        $txtModsSubtitle.Text = "Profile: $profileStr"
-        $txtModsSummaryStats.Text = "$totalModCount mods installed in profile"
-        if ($flaggedModCount -gt 0) {
-            $txtModsFlaggedCount.Text = "[!] $flaggedModCount Flagged Suspicious"
-        } else {
-            $txtModsFlaggedCount.Text = "[OK] All Mods Clean"
-            $txtModsFlaggedCount.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#34D399")
-        }
-
-        # Pre-render the mods list
-        Render-ModsList
-
-        # Build Clean Details List (No codes, no bible, just human summary)
-        $detailsContentPanel.Children.Clear()
-
-        Add-CleanSectionHeader "MINECRAFT INSTANCE & SESSION"
-        Add-CleanRow "Client"   $launcherStr "#38BDF8"
-        Add-CleanRow "Profile"  $profileStr "#E2E8F0"
-        Add-CleanRow "Played"   $timeStr "#34D399"
-        if ($txtResultServer.Text -ne "Server   : None" -and $txtResultServer.Text -ne "Server   : N/A") {
-            $srvText = if ($inst -and $inst.ConnectedServers) { $inst.ConnectedServers -join ", " } else { "Singleplayer" }
-            Add-CleanRow "Server"   $srvText "#38BDF8"
-        }
-
-        Add-CleanSectionHeader "FLAGGED CHEAT & SUSPICIOUS FILES"
-        if ($actualCheats.Count -gt 0) {
-            $shownFiles = @()
-            foreach ($c in $actualCheats) {
-                if ($c.File -notin $shownFiles) {
-                    $shownFiles += $c.File
-                    Add-CleanRow "File"     $c.File "#EF4444"
-                    if ($c.Path) { Add-CleanRow "Location" $c.Path "#94A3B8" }
-                    if ($c.Time) { Add-CleanRow "Activity" "Executed / Modified $c.Time" "#FBBF24" }
+        # Include flagged mods across ALL instances so no cheat mod is ever missed
+        if ($Global:ReportData.AllInstances) {
+            foreach ($inst in $Global:ReportData.AllInstances) {
+                if ($inst.FlaggedMods) {
+                    foreach ($fm in $inst.FlaggedMods) {
+                        $actualCheats.Add([PSCustomObject]@{
+                            File   = $fm.FileName
+                            Path   = $fm.FullPath
+                            Time   = $fm.LastWriteTime
+                            Reason = "[$($inst.Launcher) / $($inst.Profile)] $($fm.Reason)"
+                        })
+                    }
                 }
             }
-        } else {
-            Add-CleanRow "Status" "Clean: No cheat files or blacklisted loaders detected on this PC." "#34D399"
         }
 
-        Add-CleanSectionHeader "MODS CATEGORY ($totalModCount TOTAL)"
-        Add-CleanRow "Profile"  "$profileStr" "#E2E8F0"
-        Add-CleanRow "Installed" "$totalModCount mod jars present" "#38BDF8"
-        if ($flaggedModCount -gt 0) {
-            Add-CleanRow "Suspicious" "$flaggedModCount suspicious mod(s) detected!" "#EF4444"
-            foreach ($fm in $flaggedMods) {
-                Add-CleanRow " - Flagged" "$($fm.FileName) ($($fm.Reason))" "#FBBF24"
+        $script:cachedActualCheats = $actualCheats
+
+        # Populate Instance Selector Dropdowns
+        $script:isSyncingInstance = $true
+        $cmbResultInstance.Items.Clear()
+        $cmbDetailsInstance.Items.Clear()
+        $cmbModsInstance.Items.Clear()
+
+        $allInst = $Global:ReportData.AllInstances
+        if ($allInst -and $allInst.Count -gt 0) {
+            foreach ($inst in $allInst) {
+                $statusTag = if ($inst.FlaggedModsCount -gt 0) {
+                    " [!] $($inst.FlaggedModsCount) CHEAT MODS"
+                } elseif ($inst.TotalModsCount -gt 0) {
+                    " ($($inst.TotalModsCount) mods)"
+                } else {
+                    " (0 mods)"
+                }
+
+                $displayText = "[$($inst.Launcher)] $($inst.Profile)$statusTag"
+                $cmbResultInstance.Items.Add($displayText) | Out-Null
+                $cmbDetailsInstance.Items.Add($displayText) | Out-Null
+                $cmbModsInstance.Items.Add($displayText) | Out-Null
             }
+            $script:isSyncingInstance = $false
+            Sync-SelectedInstance 0
         } else {
-            Add-CleanRow "Integrity" "All $totalModCount mods passed integrity check" "#34D399"
+            $script:isSyncingInstance = $false
+            $txtResultTime.Text = "No Instance Found"
+            $txtResultClient.Text = "Client   : No Minecraft installation detected"
+            $txtResultProfile.Text = "Profile  : N/A"
+            $txtResultServer.Text = "Server   : N/A"
+            $btnMods.Content = "ALL MODS (0)"
         }
 
-        # Main Screen Cheat Badge
+        # Main Screen Cheat Badge Status
         if ($actualCheats.Count -gt 0) {
             $txtResultTitle.Text = "Cheats Detected"
             $txtResultTitle.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
@@ -2216,7 +2815,7 @@ function Show-GrickoGui {
             $txtCheatList.Visibility = [System.Windows.Visibility]::Collapsed
         }
 
-        $txtSummaryStats.Text = "$($actualCheats.Count) Cheats Flagged | Full 2-Minute PC Deep Scan Finished"
+        $txtSummaryStats.Text = "$($actualCheats.Count) Cheats Flagged | $($allInst.Count) Clients/Instances Discovered"
 
         # Show Results View
         $progressView.Visibility = [System.Windows.Visibility]::Collapsed

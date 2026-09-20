@@ -34,6 +34,7 @@ $Global:ReportData = [ordered]@{
     UserAssistTraces   = @()
     MuiCacheTraces     = @()
     ActiveInstanceMods = @()
+    AllInstances       = @()
     ModFiles           = @()
     TempFiles          = @()
     AntiForensics      = @()

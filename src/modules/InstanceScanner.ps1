@@ -1,13 +1,365 @@
 <#
-    Gricko SS Tool - Last Played Instance & Session Log Forensics
+    Gricko SS Tool - Comprehensive Multi-Client & Multi-Instance Forensic Scanner
+    Discovers, enumerates, and deeply analyzes ALL Minecraft clients, launchers & profiles.
 #>
 
+function Analyze-InstanceLog {
+    param([string]$LogFilePath)
+
+    $result = [PSCustomObject]@{
+        LogExists        = $false
+        LogPath          = $LogFilePath
+        LogSizeKB        = 0
+        IsWiped          = $false
+        ConnectedServers = [System.Collections.Generic.List[string]]::new()
+        SuspiciousHits   = [System.Collections.Generic.List[string]]::new()
+    }
+
+    if (-not $LogFilePath -or -not (Test-Path $LogFilePath)) {
+        return $result
+    }
+
+    try {
+        $logItem = Get-Item $LogFilePath -ErrorAction SilentlyContinue
+        if (-not $logItem) { return $result }
+
+        $result.LogExists = $true
+        $result.LogSizeKB = [math]::Round($logItem.Length / 1KB, 2)
+
+        if ($logItem.Length -eq 0) {
+            $result.IsWiped = $true
+            return $result
+        }
+
+        $logLines = Get-Content -Path $LogFilePath -Tail 300 -ErrorAction SilentlyContinue
+        if ($logLines) {
+            foreach ($line in $logLines) {
+                if ($line -match "Connecting to ([^,\s]+)") {
+                    $srv = $matches[1].Trim()
+                    if ($srv -notin $result.ConnectedServers) { $result.ConnectedServers.Add($srv) }
+                } elseif ($line -match "(?i)Website:\s*([a-zA-Z0-9\.\-]+)") {
+                    $srv = $matches[1].Trim()
+                    if ($srv -notin $result.ConnectedServers) { $result.ConnectedServers.Add($srv) }
+                } elseif ($line -match "(?i)\[CHAT\].*(minemen\.club|hypixel\.net|invadedlands\.net|pvptemple\.com|coldpvp\.com|bedless\.club|mcpvp\.club|syuu\.net|loyisa\.cn)") {
+                    $srv = $matches[1].Trim()
+                    if ($srv -notin $result.ConnectedServers) { $result.ConnectedServers.Add($srv) }
+                }
+
+                foreach ($sig in $Global:SuspiciousSignatures) {
+                    if ($line -match "(?i)\b$sig\b") {
+                        if ($line -notin $result.SuspiciousHits) {
+                            $result.SuspiciousHits.Add($line.Trim())
+                        }
+                        break
+                    }
+                }
+            }
+        }
+    } catch {}
+
+    return $result
+}
+
+function Analyze-InstanceMods {
+    param(
+        [string]$InstancePath,
+        [string]$ProfileName = "Unknown"
+    )
+
+    $result = [PSCustomObject]@{
+        Mods         = [System.Collections.Generic.List[PSCustomObject]]::new()
+        FlaggedMods  = [System.Collections.Generic.List[PSCustomObject]]::new()
+        TotalCount   = 0
+        FlaggedCount = 0
+    }
+
+    if (-not $InstancePath -or -not (Test-Path $InstancePath)) { return $result }
+
+    $candidateModFolders = @(
+        (Join-Path $InstancePath "mods"),
+        (Join-Path $InstancePath "user-mods"),
+        (Join-Path $InstancePath ".minecraft\mods")
+    )
+
+    $modFiles = @()
+    foreach ($mf in $candidateModFolders) {
+        if (Test-Path $mf) {
+            $found = Get-ChildItem -Path $mf -File -Filter "*.jar" -ErrorAction SilentlyContinue
+            if ($found) { $modFiles += $found }
+        }
+    }
+
+    if ($modFiles.Count -eq 0) { return $result }
+
+    $uniqueJars = $modFiles | Sort-Object Name -Unique
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+
+    # AI Helper: Shannon entropy (randomness measure for obfuscation detection)
+    function Measure-NameEntropy {
+        param([string]$s)
+        if (-not $s -or $s.Length -lt 4) { return 0.0 }
+        $freq = @{}
+        foreach ($c in $s.ToCharArray()) { $k = "$c"; if ($freq[$k]) { $freq[$k]++ } else { $freq[$k] = 1 } }
+        $len = $s.Length; $ent = 0.0
+        foreach ($v in $freq.Values) { $p = $v / $len; $ent -= $p * [Math]::Log($p, 2) }
+        return [Math]::Round($ent, 3)
+    }
+
+    # AI Helper: extract printable ASCII strings from raw binary bytes
+    function Get-BinaryStrings {
+        param([byte[]]$buf, [int]$readLen, [int]$minLen = 7)
+        $strings = [System.Collections.Generic.List[string]]::new()
+        $cur = [System.Text.StringBuilder]::new()
+        for ($i = 0; $i -lt $readLen; $i++) {
+            $b = $buf[$i]
+            if ($b -ge 32 -and $b -le 126) { $cur.Append([char]$b) | Out-Null }
+            else { if ($cur.Length -ge $minLen) { $strings.Add($cur.ToString()) }; $cur.Clear() | Out-Null }
+        }
+        if ($cur.Length -ge $minLen) { $strings.Add($cur.ToString()) }
+        return $strings
+    }
+
+    foreach ($mod in $uniqueJars) {
+        $isFlagged    = $false
+        $reason       = "Clean"
+        $category     = "CLEAN"
+        $aiRisk       = 0
+        $aiDetails    = [System.Collections.Generic.List[string]]::new()
+        $displayName  = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
+
+        # ── LAYER 1: Filename signature matching ──────────────────────────────
+        foreach ($sig in $Global:CheatSignatures) {
+            if ($mod.Name -match "(?i)$sig") {
+                $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                $reason = "Filename matches known cheat signature: $sig"; $aiRisk = 100; break
+            }
+        }
+
+        if (-not $isFlagged) {
+            try {
+                $zip        = [System.IO.Compression.ZipFile]::OpenRead($mod.FullName)
+                $allEntries = @($zip.Entries)
+
+                # ── LAYER 2: Mod metadata inspection ─────────────────────────────
+                $metaNames  = @("fabric.mod.json","quilt.mod.json","mcmod.info","META-INF/mods.toml","META-INF/MANIFEST.MF")
+                $metaAll    = ""
+                $hasMeta    = $false
+
+                foreach ($mn in $metaNames) {
+                    $me = $zip.GetEntry($mn)
+                    if ($me) {
+                        $hasMeta = $true
+                        try {
+                            $ms = $me.Open(); $mr = [System.IO.StreamReader]::new($ms)
+                            $metaAll += $mr.ReadToEnd(); $mr.Close(); $ms.Close()
+                        } catch {}
+                    }
+                }
+
+                if ($metaAll) {
+                    # Known cheat signature in metadata id/name
+                    foreach ($sig in $Global:CheatSignatures) {
+                        if ($metaAll -match "(?i)""id""\s*:\s*""[^""]*$sig" -or
+                            $metaAll -match "(?i)""name""\s*:\s*""[^""]*$sig") {
+                            $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                            $reason = "Mod metadata id/name matches cheat signature: $sig"; $aiRisk = 100; break
+                        }
+                    }
+                    # Extra heuristic keywords in metadata
+                    if (-not $isFlagged) {
+                        $heurKw = @("killaura","aimbot","triggerbot","reach","velocity","esp","wallhack",
+                                    "xray","bhop","fly","freecam","nofall","autoeat","scaffold","phase",
+                                    "step","jesus","wurst","meteor","vape","bleachhack","future","sigma",
+                                    "rusherhack","liquidbounce","autoclicker","crystaloptimizer","hack","cheat")
+                        foreach ($kw in $heurKw) {
+                            if ($metaAll -match "(?i)\b$kw\b") {
+                                $aiRisk += 40; $aiDetails.Add("Metadata contains cheat keyword: '$kw'"); break
+                            }
+                        }
+                    }
+                }
+
+                if (-not $isFlagged) {
+
+                    # ── LAYER 3: Mixin configuration analysis ─────────────────────
+                    foreach ($entry in ($allEntries | Where-Object { $_.FullName -match "mixin.*\.json$" })) {
+                        try {
+                            $ms = $entry.Open(); $mr = [System.IO.StreamReader]::new($ms)
+                            $mc = $mr.ReadToEnd(); $mr.Close(); $ms.Close()
+                            if ($mc -match "(?i)(killaura|aimbot|autoclicker|reach|velocity|esp|cheat|hack|inject|bypass|antiac)") {
+                                $aiRisk += 50; $aiDetails.Add("Mixin targets cheat/combat class: $($entry.FullName)"); break
+                            }
+                        } catch {}
+                    }
+
+                    # ── LAYER 4: Known cheat class-path packages ──────────────────
+                    $cheatPkgs = @("wurstclient","meteordevelopment","vape","crystaloptimizer",
+                                   "anchoroptimizer","autoclicker","raven/b","liquidbounce",
+                                   "rusherhack","tenacity","novoline","rise/client","futureclient",
+                                   "astolfo","sigma/client","salware","drip/loader","weavemc",
+                                   "weave/loader","bape/client","lowkey/client","itami/client",
+                                   "dreamclient","entropy/client","spectral/client","pluto/client",
+                                   # Mace / CPVP cheat packages
+                                   "us/kenny","us/kenny/mace","us/kenny/triggerbot","us/kenny/web",
+                                   "maceassist","mace/assist","cpvp/client","cpvpclient",
+                                   "lungemacro","lunge/macro","windchargeassist","windcharge/assist",
+                                   "crystalaura","crystal/aura","autocrystal","auto/crystal")
+
+                    foreach ($entry in $allEntries) {
+                        $eName = $entry.FullName.ToLower()
+                        foreach ($pkg in $cheatPkgs) {
+                            if ($eName -match [regex]::Escape($pkg)) {
+                                $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                                $reason = "Contains known cheat class package: $($entry.FullName)"; $aiRisk = 100; break
+                            }
+                        }
+                        if ($isFlagged) { break }
+                    }
+
+                    if (-not $isFlagged) {
+
+                        # ── LAYER 5: Suspicious string constants in .class bytecode ─
+                        $suspPats = @(
+                            # Standard cheat combat APIs
+                            "RotationManager","AimAssist","AimBot","lookAt","snapTo","smoothAim",
+                            "smoothRotate","rotateToEntity","rotateToPlayer","predictRotation",
+                            "ReachCheck","ReachExtend","hitboxSize","attackRange","extendHitbox",
+                            "setReach","hitboxExpand","reachDistance",
+                            "EspModule","PlayerESP","StorageESP","TracerModule","drawBox","drawOutline",
+                            "KillAura","MultiAura","TriggerBot","AutoClick","attackEntity",
+                            "autoSwing","swingAura","autoAttack","attackAura","triggerAttack",
+                            "FlightModule","SpeedModule","NoFall","StepModule","TimerModule",
+                            "VelocityModule","AntiKnockback","NoVelocity","velocityMultiplier",
+                            "InjectLoader","AgentLoader","premain","agentmain","retransformClasses",
+                            "AntiScreen","DisableDebugger","AntiAC","BypassAC","checkIntegrity",
+                            "streamProof","StreamProof","hideFromScreen","overlayWindow","invisibleOverlay",
+
+                            # Mace / CPVP specific (BetterMace, MaceAssist, etc.)
+                            "MaceAssistManager","MaceAssist","maceAssist","maceTrigger","MaceTrigger",
+                            "LungeMacro","lungeMacro","maceAim","MaceAim","maceBoost","MaceBoost",
+                            "TriggerbotManager","triggerbotManager","triggerBot","TriggerBot",
+                            "PlayerEspManager","playerEspManager","StreamProofOverlayManager",
+                            "WebConfigServer","webConfigServer","explodeMod","ExplodeMod",
+                            "WindChargeAssist","windChargeAssist","maceSwing","autoMace","AutoMace",
+                            "fallVelocityCheck","minFallDistance","aimAssistEnabled","cpvpModule",
+                            "smartCrit","smartCrits","shieldBypass","ShieldBypass","autoAxeSwap",
+                            "CrystalAura","crystalAura","AutoCrystal","autoCrystal","placeDelay",
+                            "breakDelay","clickSimulation","autoGlowstone","autoRefillInventory",
+
+                            # Obfuscator markers
+                            "Allatori","Obfuscated by","Stringer","Zelix","DashO","JBCO","SkidFuscator"
+                        )
+                        $classEntries = @($allEntries | Where-Object { $_.FullName -match "\.class$" } | Select-Object -First 14)
+                        $strHits      = [System.Collections.Generic.List[string]]::new()
+                        $readBuf      = [byte[]]::new(131072)
+
+                        foreach ($ce in $classEntries) {
+                            try {
+                                $ces = $ce.Open()
+                                $readLen = $ces.Read($readBuf, 0, [Math]::Min($ce.Length, 131072))
+                                $ces.Close()
+                                foreach ($cs in (Get-BinaryStrings -buf $readBuf -readLen $readLen -minLen 7)) {
+                                    foreach ($pat in $suspPats) {
+                                        if ($cs -match "(?i)$pat" -and $strHits.Count -lt 6) {
+                                            $strHits.Add($cs.Substring(0, [Math]::Min($cs.Length, 55)).Trim())
+                                        }
+                                    }
+                                }
+                            } catch {}
+                        }
+
+                        if     ($strHits.Count -ge 4) { $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings — '$($strHits[0])'") }
+                        elseif ($strHits.Count -ge 2) { $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'") }
+                        elseif ($strHits.Count -eq 1) { $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'") }
+
+                        # ── LAYER 6: Obfuscation entropy scoring ──────────────────
+                        $classNames = @($allEntries | Where-Object { $_.FullName -match "\.class$" } |
+                            ForEach-Object { [System.IO.Path]::GetFileNameWithoutExtension($_.FullName) })
+
+                        if ($classNames.Count -ge 5) {
+                            $shortRatio = (@($classNames | Where-Object { $_.Length -le 2 }).Count) / $classNames.Count
+                            if ($shortRatio -gt 0.65 -and $classNames.Count -gt 20) {
+                                $aiRisk += 35; $aiDetails.Add("Heavy obfuscation: $([math]::Round($shortRatio*100))% of $($classNames.Count) classes are 1-2 char names")
+                            } elseif ($shortRatio -gt 0.35 -and $classNames.Count -gt 10) {
+                                $aiRisk += 14; $aiDetails.Add("Moderate obfuscation: $([math]::Round($shortRatio*100))% short class names")
+                            }
+                            $ent = Measure-NameEntropy -s (($classNames | Select-Object -First 30) -join "")
+                            if ($ent -gt 4.6) { $aiRisk += 18; $aiDetails.Add("High class-path entropy ($ent bits) — randomized naming") }
+                        }
+
+                        # ── LAYER 7: Suspicious JAR structure ─────────────────────
+                        $classCount    = ($allEntries | Where-Object { $_.FullName -match "\.class$" }).Count
+                        $resourceCount = ($allEntries | Where-Object { $_.FullName -notmatch "\.class$" -and $_.FullName -notmatch "/$" }).Count
+                        $sizeKB        = [math]::Round($mod.Length / 1KB, 1)
+
+                        if (-not $hasMeta)                                { $aiRisk += 20; $aiDetails.Add("No mod metadata (unusual for legitimate mods)") }
+                        if ($resourceCount -eq 0 -and $classCount -gt 5) { $aiRisk += 15; $aiDetails.Add("Pure class-only JAR ($classCount classes, 0 resources)") }
+                        if ($sizeKB -lt 25 -and $classCount -gt 12)      { $aiRisk += 18; $aiDetails.Add("Suspicious: $sizeKB KB JAR with $classCount classes (typical loader)") }
+
+                        # ── LAYER 8: Dangerous Java API imports ───────────────────
+                        $dangerPkgs = @("java/lang/instrument/","sun/misc/Unsafe","java/lang/reflect/Proxy","com/sun/tools/attach/")
+                        $dangerHits = 0; $smallBuf = [byte[]]::new(8192)
+
+                        foreach ($ce in ($allEntries | Where-Object { $_.FullName -match "\.class$" } | Select-Object -First 8)) {
+                            try {
+                                $ces = $ce.Open(); $rlen = $ces.Read($smallBuf, 0, 8192); $ces.Close()
+                                $es  = [System.Text.Encoding]::ASCII.GetString($smallBuf, 0, $rlen)
+                                foreach ($dp in $dangerPkgs) { if ($es -match [regex]::Escape($dp)) { $dangerHits++ } }
+                            } catch {}
+                        }
+                        if ($dangerHits -ge 3) { $aiRisk += 25; $aiDetails.Add("$dangerHits dangerous Java APIs: instrument/unsafe/proxy/attach") }
+                        elseif ($dangerHits -gt 0) { $aiRisk += 8 }
+
+                        $zip.Dispose()
+
+                        # ── Final AI Verdict ───────────────────────────────────────
+                        $aiRisk = [Math]::Min($aiRisk, 99)
+
+                        if ($aiRisk -ge 60) {
+                            $isFlagged = $true; $category = "HEURISTIC RISK — AI FLAGGED"
+                            $top = if ($aiDetails.Count -gt 0) { $aiDetails[0] } else { "Multiple heuristic triggers" }
+                            $reason = "AI Risk: $aiRisk/99 — $top"
+                        } elseif ($aiRisk -ge 30) {
+                            $category = "LOW RISK — REVIEW SUGGESTED"
+                            $top = if ($aiDetails.Count -gt 0) { $aiDetails[0] } else { "Minor heuristic hit" }
+                            $reason = "AI Risk: $aiRisk/99 — $top"
+                        }
+
+                    } else { $zip.Dispose() }
+                } else { $zip.Dispose() }
+            } catch {}
+        }
+
+        $modObj = [PSCustomObject]@{
+            Name          = $displayName
+            FileName      = $mod.Name
+            FullPath      = $mod.FullName
+            SizeKB        = [math]::Round($mod.Length / 1KB, 1)
+            LastWriteTime = $mod.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+            IsFlagged     = $isFlagged
+            Category      = $category
+            Reason        = $reason
+            AIRiskScore   = $aiRisk
+            AIDetails     = if ($aiDetails.Count -gt 0) { ($aiDetails -join " | ") } else { "" }
+        }
+
+        $result.Mods.Add($modObj)
+        if ($isFlagged) { $result.FlaggedMods.Add($modObj); $result.FlaggedCount++ }
+    }
+
+    $result.TotalCount = $result.Mods.Count
+    return $result
+}
+
+
 function Scan-LastPlayedInstance {
-    Write-SectionHeader "LAST PLAYED MINECRAFT INSTANCE & LOG FORENSICS"
+    Write-SectionHeader "MINECRAFT INSTANCES & LOG FORENSICS (ALL CLIENTS)"
 
     $instances = [System.Collections.Generic.List[PSCustomObject]]::new()
 
+    # -------------------------------------------------------------
     # 0. Active Running Java / Minecraft Process Check
+    # -------------------------------------------------------------
     try {
         $javaProcesses = Get-CimInstance Win32_Process -Filter "Name = 'javaw.exe' or Name = 'java.exe'" -ErrorAction SilentlyContinue
         foreach ($proc in $javaProcesses) {
@@ -15,16 +367,16 @@ function Scan-LastPlayedInstance {
             if (-not $cmd) { continue }
             if ($cmd -match "minecraft" -or $cmd -match "lunar" -or $cmd -match "feather" -or $cmd -match "badlion" -or $cmd -match "forge" -or $cmd -match "fabric" -or $cmd -match "optifine" -or $cmd -match "net.minecraft") {
                 $clientName = "Minecraft (Vanilla / Custom)"
-                if ($cmd -match "(?i)feather") { $clientName = "Feather Client (Running)" }
-                elseif ($cmd -match "(?i)lunar") { $clientName = "Lunar Client (Running)" }
-                elseif ($cmd -match "(?i)badlion") { $clientName = "Badlion Client (Running)" }
-                elseif ($cmd -match "(?i)theseus|modrinth") { $clientName = "Modrinth App (Running)" }
-                elseif ($cmd -match "(?i)curseforge") { $clientName = "CurseForge (Running)" }
-                elseif ($cmd -match "(?i)prism") { $clientName = "Prism Launcher (Running)" }
-                elseif ($cmd -match "(?i)salwyrr") { $clientName = "Salwyrr Client (Running)" }
-                elseif ($cmd -match "(?i)labymod") { $clientName = "LabyMod (Running)" }
-                elseif ($cmd -match "(?i)fabric") { $clientName = "Fabric Loader (Running)" }
-                elseif ($cmd -match "(?i)forge") { $clientName = "Forge Loader (Running)" }
+                if ($cmd -match "(?i)feather") { $clientName = "Feather Client" }
+                elseif ($cmd -match "(?i)lunar") { $clientName = "Lunar Client" }
+                elseif ($cmd -match "(?i)badlion") { $clientName = "Badlion Client" }
+                elseif ($cmd -match "(?i)theseus|modrinth") { $clientName = "Modrinth App" }
+                elseif ($cmd -match "(?i)curseforge") { $clientName = "CurseForge" }
+                elseif ($cmd -match "(?i)prism") { $clientName = "Prism Launcher" }
+                elseif ($cmd -match "(?i)salwyrr") { $clientName = "Salwyrr Client" }
+                elseif ($cmd -match "(?i)labymod") { $clientName = "LabyMod" }
+                elseif ($cmd -match "(?i)fabric") { $clientName = "Fabric Loader" }
+                elseif ($cmd -match "(?i)forge") { $clientName = "Forge Loader" }
 
                 $gameDir = $null
                 if ($cmd -match '--gameDir\s+"?([^"]+)"?') { $gameDir = $matches[1].Trim() }
@@ -33,20 +385,22 @@ function Scan-LastPlayedInstance {
                 $logPath = if ($gameDir) { Join-Path $gameDir "logs\latest.log" } else { $null }
 
                 $instances.Add([PSCustomObject]@{
-                    Launcher   = $clientName
-                    Profile    = "Active Running Game (PID $($proc.ProcessId))"
-                    Version    = "Active Session"
+                    Launcher   = "$clientName (Running)"
+                    Profile    = "Active Game (PID $($proc.ProcessId))"
+                    Version    = "Active Running Session"
                     Path       = if ($gameDir) { $gameDir } else { "Process PID $($proc.ProcessId)" }
                     LogFile    = $logPath
                     LastPlayed = (Get-Date)
+                    IsRunning  = $true
                 })
             }
         }
     } catch {}
 
-    # 1. Modrinth Launcher (Theseus & Modrinth App) - Check first to prioritize modern multi-drive installations
+    # -------------------------------------------------------------
+    # 1. Modrinth Launcher (All Profiles & All Drives)
+    # -------------------------------------------------------------
     $modrinthProfileDirs = [System.Collections.Generic.List[string]]::new()
-    
     $candidateModrinthDirs = @(
         (Join-Path $env:APPDATA "com.modrinth.theseus\profiles"),
         (Join-Path $env:APPDATA "ModrinthApp\profiles"),
@@ -98,18 +452,32 @@ function Scan-LastPlayedInstance {
         foreach ($mDir in $subDirs) {
             $mLog = Join-Path $mDir.FullName "logs\latest.log"
             $mTime = if (Test-Path $mLog) { (Get-Item $mLog).LastWriteTime } else { $mDir.LastWriteTime }
+            
+            # Detect version from profile-metadata.json if available
+            $mVer = "Modrinth Profile"
+            $metaJson = Join-Path $mDir.FullName "profile-metadata.json"
+            if (Test-Path $metaJson) {
+                try {
+                    $mj = Get-Content -Raw $metaJson -ErrorAction SilentlyContinue | ConvertFrom-Json
+                    if ($mj.game_version) { $mVer = "$($mj.loader) $($mj.game_version)" }
+                } catch {}
+            }
+
             $instances.Add([PSCustomObject]@{
                 Launcher   = "Modrinth App"
                 Profile    = $mDir.Name
-                Version    = "Modrinth Profile (Fabric)"
+                Version    = $mVer
                 Path       = $mDir.FullName
                 LogFile    = if (Test-Path $mLog) { $mLog } else { $null }
                 LastPlayed = $mTime
+                IsRunning  = $false
             })
         }
     }
 
-    # 2. Feather Client
+    # -------------------------------------------------------------
+    # 2. Feather Client (All Profiles & Root)
+    # -------------------------------------------------------------
     $featherPaths = @(
         (Join-Path $env:APPDATA ".feather"),
         (Join-Path $env:USERPROFILE ".feather"),
@@ -117,38 +485,88 @@ function Scan-LastPlayedInstance {
     )
     foreach ($fPath in $featherPaths) {
         if (Test-Path $fPath) {
-            $fLog = Join-Path $fPath "logs\latest.log"
-            $fLastTime = if (Test-Path $fLog) { (Get-Item $fLog).LastWriteTime } else { (Get-Item $fPath).LastWriteTime }
+            # Check for sub-instances
+            $fInstancesDir = Join-Path $fPath "instances"
+            $hasSub = $false
+            if (Test-Path $fInstancesDir) {
+                $fSubDirs = Get-ChildItem -Path $fInstancesDir -Directory -ErrorAction SilentlyContinue
+                foreach ($fsd in $fSubDirs) {
+                    $hasSub = $true
+                    $fLog = Join-Path $fsd.FullName "logs\latest.log"
+                    $fTime = if (Test-Path $fLog) { (Get-Item $fLog).LastWriteTime } else { $fsd.LastWriteTime }
+                    $instances.Add([PSCustomObject]@{
+                        Launcher   = "Feather Client"
+                        Profile    = $fsd.Name
+                        Version    = "Feather Instance"
+                        Path       = $fsd.FullName
+                        LogFile    = $fLog
+                        LastPlayed = $fTime
+                        IsRunning  = $false
+                    })
+                }
+            }
+
+            # Also add root feather profile
+            $fLogRoot = Join-Path $fPath "logs\latest.log"
+            $fRootTime = if (Test-Path $fLogRoot) { (Get-Item $fLogRoot).LastWriteTime } else { (Get-Item $fPath).LastWriteTime }
             $instances.Add([PSCustomObject]@{
                 Launcher   = "Feather Client"
-                Profile    = "Feather Profile"
+                Profile    = "Feather Default"
                 Version    = "Feather Fabric/Forge"
                 Path       = $fPath
-                LogFile    = $fLog
-                LastPlayed = $fLastTime
+                LogFile    = $fLogRoot
+                LastPlayed = $fRootTime
+                IsRunning  = $false
             })
             break
         }
     }
 
-    # 3. Lunar Client
+    # -------------------------------------------------------------
+    # 3. Lunar Client (MultiVer & Subversions)
+    # -------------------------------------------------------------
     $lunarPath = Join-Path $env:USERPROFILE ".lunarclient"
     if (Test-Path $lunarPath) {
+        $multiVer = Join-Path $lunarPath "offline\multiver"
+        $hasMulti = $false
+        if (Test-Path $multiVer) {
+            $lunarVersions = Get-ChildItem -Path $multiVer -Directory -ErrorAction SilentlyContinue
+            foreach ($lv in $lunarVersions) {
+                $hasMulti = $true
+                $lvLog = Join-Path $lv.FullName "logs\latest.log"
+                if (-not (Test-Path $lvLog)) { $lvLog = Join-Path $multiVer "logs\latest.log" }
+                $lvTime = if (Test-Path $lvLog) { (Get-Item $lvLog).LastWriteTime } else { $lv.LastWriteTime }
+                $instances.Add([PSCustomObject]@{
+                    Launcher   = "Lunar Client"
+                    Profile    = $lv.Name
+                    Version    = "Lunar MultiVer ($($lv.Name))"
+                    Path       = $lv.FullName
+                    LogFile    = $lvLog
+                    LastPlayed = $lvTime
+                    IsRunning  = $false
+                })
+            }
+        }
+
+        # Also add overall Lunar Client profile
         $lunarLog = Join-Path $lunarPath "offline\multiver\logs\latest.log"
         if (-not (Test-Path $lunarLog)) { $lunarLog = Join-Path $lunarPath "logs\launcher\renderer.log" }
         if (-not (Test-Path $lunarLog)) { $lunarLog = Join-Path $lunarPath "logs\launcher\main.log" }
         $lTime = if (Test-Path $lunarLog) { (Get-Item $lunarLog).LastWriteTime } else { (Get-Item $lunarPath).LastWriteTime }
         $instances.Add([PSCustomObject]@{
             Launcher   = "Lunar Client"
-            Profile    = "Lunar MultiVer Profile"
+            Profile    = "Lunar Client"
             Version    = "Lunar Client"
             Path       = $lunarPath
             LogFile    = $lunarLog
             LastPlayed = $lTime
+            IsRunning  = $false
         })
     }
 
+    # -------------------------------------------------------------
     # 4. Badlion Client
+    # -------------------------------------------------------------
     $badlionPaths = @(
         (Join-Path $env:APPDATA "Badlion Client"),
         (Join-Path $env:APPDATA ".minecraft\badlion"),
@@ -165,12 +583,15 @@ function Scan-LastPlayedInstance {
                 Path       = $blPath
                 LogFile    = $blLog
                 LastPlayed = $blTime
+                IsRunning  = $false
             })
             break
         }
     }
 
-    # 5. CurseForge
+    # -------------------------------------------------------------
+    # 5. CurseForge (All Instances)
+    # -------------------------------------------------------------
     $cursePaths = @(
         (Join-Path $env:USERPROFILE "curseforge\minecraft\Instances"),
         (Join-Path $env:USERPROFILE "Documents\curseforge\minecraft\Instances")
@@ -188,12 +609,15 @@ function Scan-LastPlayedInstance {
                     Path       = $cfDir.FullName
                     LogFile    = $cfLog
                     LastPlayed = $cfTime
+                    IsRunning  = $false
                 })
             }
         }
     }
 
-    # 6. Prism Launcher & MultiMC
+    # -------------------------------------------------------------
+    # 6. Prism Launcher & MultiMC & PolyMC (All Instances)
+    # -------------------------------------------------------------
     $prismPaths = @(
         (Join-Path $env:APPDATA "PrismLauncher\instances"),
         (Join-Path $env:APPDATA "MultiMC\instances"),
@@ -213,12 +637,15 @@ function Scan-LastPlayedInstance {
                     Path       = $pDir.FullName
                     LogFile    = $pLog
                     LastPlayed = $pTime
+                    IsRunning  = $false
                 })
             }
         }
     }
 
-    # 7. Salwyrr
+    # -------------------------------------------------------------
+    # 7. Salwyrr Client
+    # -------------------------------------------------------------
     $salwyrrPaths = @(
         (Join-Path $env:APPDATA ".salwyrr"),
         (Join-Path $env:USERPROFILE ".salwyrr")
@@ -234,20 +661,29 @@ function Scan-LastPlayedInstance {
                 Path       = $sPath
                 LogFile    = $sLog
                 LastPlayed = $sTime
+                IsRunning  = $false
             })
             break
         }
     }
 
-    # 8. Standard .minecraft (Vanilla, Forge, Fabric)
-    $dotMc = Join-Path $env:APPDATA ".minecraft"
-    if (Test-Path $dotMc) {
+    # -------------------------------------------------------------
+    # 8. Standard .minecraft (Parse ALL Profiles in launcher_profiles.json)
+    # -------------------------------------------------------------
+    $dotMcCandidates = @((Join-Path $env:APPDATA ".minecraft"))
+    foreach ($drive in (Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue)) {
+        $cand = Join-Path $drive.Root ".minecraft"
+        if ((Test-Path $cand) -and ($cand -notin $dotMcCandidates)) {
+            $dotMcCandidates += $cand
+        }
+    }
+
+    foreach ($dotMc in $dotMcCandidates) {
+        if (-not (Test-Path $dotMc)) { continue }
+
         $lpJson = Join-Path $dotMc "launcher_profiles.json"
         $latestLog = Join-Path $dotMc "logs\latest.log"
-
-        $lastUsedTime = $null
-        $profileName = "Standard Profile"
-        $versionId = "Vanilla / Forge / Fabric"
+        $mcAddedAny = $false
 
         if (Test-Path $lpJson) {
             try {
@@ -255,46 +691,149 @@ function Scan-LastPlayedInstance {
                 if ($lp.profiles) {
                     foreach ($prop in $lp.profiles.PSObject.Properties) {
                         $p = $prop.Value
+                        $pName = if ($p.name) { $p.name } else { $prop.Name }
+                        $vId = if ($p.lastVersionId) { $p.lastVersionId } else { "Vanilla / Forge / Fabric" }
+                        $pDir = if ($p.gameDir -and (Test-Path $p.gameDir)) { $p.gameDir } else { $dotMc }
+                        $pLog = Join-Path $pDir "logs\latest.log"
+                        
+                        $pTime = $null
                         if ($p.lastUsed) {
-                            $t = [DateTime]::Parse($p.lastUsed)
-                            if (-not $lastUsedTime -or $t -gt $lastUsedTime) {
-                                $lastUsedTime = $t
-                                $profileName = if ($p.name) { $p.name } else { $prop.Name }
-                                $versionId = if ($p.lastVersionId) { $p.lastVersionId } else { "Custom" }
-                            }
+                            try { $pTime = [DateTime]::Parse($p.lastUsed) } catch {}
                         }
+                        if (-not $pTime -and (Test-Path $pLog)) {
+                            $pTime = (Get-Item $pLog).LastWriteTime
+                        }
+                        if (-not $pTime) {
+                            $pTime = (Get-Item $pDir).LastWriteTime
+                        }
+
+                        $instances.Add([PSCustomObject]@{
+                            Launcher   = "Standard Minecraft"
+                            Profile    = $pName
+                            Version    = $vId
+                            Path       = $pDir
+                            LogFile    = $pLog
+                            LastPlayed = $pTime
+                            IsRunning  = $false
+                        })
+                        $mcAddedAny = $true
                     }
                 }
             } catch {}
         }
 
-        if (Test-Path $latestLog) {
-            $logWriteTime = (Get-Item $latestLog).LastWriteTime
-            if (-not $lastUsedTime -or $logWriteTime -gt $lastUsedTime) {
-                $lastUsedTime = $logWriteTime
-            }
-        }
-
-        if ($lastUsedTime) {
+        # If no individual profile was added from JSON, add standard .minecraft
+        if (-not $mcAddedAny) {
+            $logWriteTime = if (Test-Path $latestLog) { (Get-Item $latestLog).LastWriteTime } else { (Get-Item $dotMc).LastWriteTime }
             $instances.Add([PSCustomObject]@{
-                Launcher   = "Standard Minecraft (.minecraft)"
-                Profile    = $profileName
-                Version    = $versionId
+                Launcher   = "Standard Minecraft"
+                Profile    = "Standard Profile"
+                Version    = "Vanilla / Forge / Fabric"
                 Path       = $dotMc
                 LogFile    = $latestLog
-                LastPlayed = $lastUsedTime
+                LastPlayed = $logWriteTime
+                IsRunning  = $false
             })
         }
     }
 
-    # Pick the most recently launched instance across all launchers and drives
-    $sortedInstances = $instances | Sort-Object LastPlayed -Descending
+    # -------------------------------------------------------------
+    # Deduplicate & Deep Analyze ALL Discovered Instances
+    # -------------------------------------------------------------
+    $uniqueInstances = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $seenKeys = [System.Collections.Generic.HashSet[string]]::new()
+
+    foreach ($inst in $instances) {
+        $key = "$($inst.Launcher)|$($inst.Profile)|$($inst.Path)".ToLower()
+        if (-not $seenKeys.Contains($key)) {
+            $seenKeys.Add($key) | Out-Null
+            $uniqueInstances.Add($inst)
+        }
+    }
+
+    # Deeply analyze logs and mods for EVERY instance found on the machine
+    $analyzedInstances = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $allFlaggedModsCount = 0
+
+    foreach ($inst in $uniqueInstances) {
+        $logAnalysis = Analyze-InstanceLog -LogFilePath $inst.LogFile
+        $modsAnalysis = Analyze-InstanceMods -InstancePath $inst.Path -ProfileName $inst.Profile
+
+        $lpTimeStr = if ($inst.LastPlayed -is [DateTime]) {
+            $inst.LastPlayed.ToString("yyyy-MM-dd HH:mm:ss")
+        } elseif ($inst.LastPlayed) {
+            "$($inst.LastPlayed)"
+        } else {
+            "Historical"
+        }
+
+        $analyzedObj = [PSCustomObject]@{
+            Id               = [Guid]::NewGuid().ToString()
+            DisplayName      = "$($inst.Launcher) - $($inst.Profile)"
+            Launcher         = $inst.Launcher
+            LauncherName     = $inst.Launcher
+            Profile          = $inst.Profile
+            ProfileName      = $inst.Profile
+            Version          = $inst.Version
+            Path             = $inst.Path
+            LogFile          = $inst.LogFile
+            LastPlayed       = $inst.LastPlayed
+            LastPlayedTime   = $lpTimeStr
+            IsRunning        = [bool]$inst.IsRunning
+            ConnectedServers = $logAnalysis.ConnectedServers
+            IsLogWiped       = $logAnalysis.IsWiped
+            SuspiciousLog    = $logAnalysis.SuspiciousHits
+            Mods             = $modsAnalysis.Mods
+            FlaggedMods      = $modsAnalysis.FlaggedMods
+            TotalModsCount   = $modsAnalysis.TotalCount
+            FlaggedModsCount = $modsAnalysis.FlaggedCount
+        }
+
+        # Raise alerts for cheat detections in any instance
+        if ($analyzedObj.FlaggedModsCount -gt 0) {
+            $allFlaggedModsCount += $analyzedObj.FlaggedModsCount
+            foreach ($fm in $analyzedObj.FlaggedMods) {
+                Write-Alert -Level "FLAG" -Message "SUSPICIOUS OR CHEAT MOD DETECTED!" -Detail "[$($analyzedObj.Launcher) / $($analyzedObj.Profile)] $($fm.FileName) ($($fm.Reason))"
+            }
+        }
+
+        if ($analyzedObj.IsLogWiped) {
+            Write-Alert -Level "FLAG" -Message "INSTANCE LOG WAS WIPED OR EMPTY (0 BYTES)!" -Detail "[$($analyzedObj.Launcher) / $($analyzedObj.Profile)] $($analyzedObj.LogFile)"
+        }
+
+        $analyzedInstances.Add($analyzedObj)
+    }
+
+    # Sort instances: running first, then by last played descending
+    $sortedInstances = $analyzedInstances | Sort-Object -Property @{ Expression = { $_.IsRunning }; Descending = $true }, @{ Expression = { if ($_.LastPlayed -is [DateTime]) { $_.LastPlayed } else { [DateTime]::MinValue } }; Descending = $true }
+
+    $Global:ReportData.AllInstances = $sortedInstances
+
+    # Pick the most suitable default / last played instance
     $lastPlayed = $sortedInstances | Select-Object -First 1
 
     if ($lastPlayed) {
+        $Global:ReportData.LastPlayedInstance = [ordered]@{
+            Launcher         = $lastPlayed.Launcher
+            LauncherName     = $lastPlayed.Launcher
+            Profile          = $lastPlayed.Profile
+            ProfileName      = $lastPlayed.Profile
+            Version          = $lastPlayed.Version
+            Path             = $lastPlayed.Path
+            LogFile          = $lastPlayed.LogFile
+            LastPlayed       = $lastPlayed.LastPlayedTime
+            LastPlayedTime   = $lastPlayed.LastPlayedTime
+            ConnectedServers = $lastPlayed.ConnectedServers
+            IsLogWiped       = $lastPlayed.IsLogWiped
+            TotalModsCount   = $lastPlayed.TotalModsCount
+            FlaggedModsCount = $lastPlayed.FlaggedModsCount
+        }
+
+        $Global:ReportData.ActiveInstanceMods = $lastPlayed.Mods
+
         Write-Host ""
         Write-Host "  +--------------------------------------------------------------------------+" -ForegroundColor Magenta
-        Write-Host "  |  (*) LAST PLAYED INSTANCE IDENTIFIED (ACTIVE TARGET)                     |" -ForegroundColor Magenta
+        Write-Host "  |  (*) ACTIVE TARGET INSTANCE (ALL $($sortedInstances.Count) INSTANCES ANALYZED)               |" -ForegroundColor Magenta
         Write-Host "  +--------------------------------------------------------------------------+" -ForegroundColor Magenta
         Write-Host "  |  Launcher : " -NoNewline -ForegroundColor DarkMagenta
         Write-Host ($lastPlayed.Launcher).PadRight(58) -NoNewline -ForegroundColor Cyan
@@ -306,81 +845,39 @@ function Scan-LastPlayedInstance {
         Write-Host ($lastPlayed.Version).PadRight(58) -NoNewline -ForegroundColor White
         Write-Host "|" -ForegroundColor Magenta
         Write-Host "  |  Last Run : " -NoNewline -ForegroundColor DarkMagenta
-        Write-Host ($lastPlayed.LastPlayed.ToString("yyyy-MM-dd HH:mm:ss")).PadRight(58) -NoNewline -ForegroundColor Green
+        Write-Host ($lastPlayed.LastPlayedTime).PadRight(58) -NoNewline -ForegroundColor Green
         Write-Host "|" -ForegroundColor Magenta
         Write-Host "  |  Path     : " -NoNewline -ForegroundColor DarkMagenta
         $truncPath = if ($lastPlayed.Path.Length -gt 58) { "..." + $lastPlayed.Path.Substring($lastPlayed.Path.Length - 55) } else { $lastPlayed.Path }
         Write-Host $truncPath.PadRight(58) -NoNewline -ForegroundColor DarkCyan
         Write-Host "|" -ForegroundColor Magenta
+        Write-Host "  |  Mods     : " -NoNewline -ForegroundColor DarkMagenta
+        $modSummary = "$($lastPlayed.TotalModsCount) installed ($($lastPlayed.FlaggedModsCount) flagged)"
+        Write-Host $modSummary.PadRight(58) -NoNewline -ForegroundColor $(if ($lastPlayed.FlaggedModsCount -gt 0) { "Red" } else { "Green" })
+        Write-Host "|" -ForegroundColor Magenta
         Write-Host "  +--------------------------------------------------------------------------+" -ForegroundColor Magenta
         Write-Host ""
 
-        $connectedServers = [System.Collections.Generic.List[string]]::new()
-        $logFileTarget = $lastPlayed.LogFile
-
-        # Deep Inspection of Instance latest.log if present
-        if ($logFileTarget -and (Test-Path $logFileTarget)) {
-            $logItem = Get-Item $logFileTarget
-            Write-Alert -Level "INFO" -Message "Analyzing session log file" -Detail "$logFileTarget (Size: $([math]::Round($logItem.Length / 1KB, 2)) KB)"
-
-            if ($logItem.Length -eq 0) {
-                Write-Alert -Level "FLAG" -Message "INSTANCE LOG WAS WIPED OR EMPTY (0 BYTES)!" -Detail "Strong indicator of log clearing right before screenshare."
-            } else {
-                $logLines = Get-Content -Path $logFileTarget -Tail 300 -ErrorAction SilentlyContinue
-                $suspiciousLogHits = 0
-
-                foreach ($line in $logLines) {
-                    if ($line -match "Connecting to ([^,\s]+)") {
-                        $server = $matches[1].Trim()
-                        if ($server -notin $connectedServers) {
-                            $connectedServers.Add($server)
-                        }
-                    } elseif ($line -match "(?i)Website:\s*([a-zA-Z0-9\.\-]+)") {
-                        $server = $matches[1].Trim()
-                        if ($server -notin $connectedServers) {
-                            $connectedServers.Add($server)
-                        }
-                    } elseif ($line -match "(?i)\[CHAT\].*(minemen\.club|hypixel\.net|invadedlands\.net|pvptemple\.com|coldpvp\.com|bedless\.club|mcpvp\.club|syuu\.net|loyisa\.cn)") {
-                        $server = $matches[1].Trim()
-                        if ($server -notin $connectedServers) {
-                            $connectedServers.Add($server)
-                        }
-                    }
-
-                    foreach ($sig in $Global:SuspiciousSignatures) {
-                        if ($line -match "(?i)\b$sig\b") {
-                            $suspiciousLogHits++
-                            Write-Alert -Level "FLAG" -Message "SUSPICIOUS STRING FOUND IN ACTIVE SESSION LOG!" -Detail "Line: $line"
-                            break
-                        }
-                    }
-                }
-
-                if ($connectedServers.Count -gt 0) {
-                    Write-Alert -Level "INFO" -Message "Connected servers identified in session" -Detail ($connectedServers -join ", ")
-                }
-
-                if ($suspiciousLogHits -eq 0) {
-                    Write-Alert -Level "OK" -Message "No known cheat signatures found in latest.log."
-                }
+        # Summary list of all other detected clients & instances
+        if ($sortedInstances.Count -gt 1) {
+            Write-Host "  Discovered Minecraft Instances ($($sortedInstances.Count) total across all launchers):" -ForegroundColor DarkGray
+            foreach ($other in $sortedInstances) {
+                $statusFlag = if ($other.FlaggedModsCount -gt 0) { "[!] CHEAT MODS ($($other.FlaggedModsCount))" } else { "[OK] Clean ($($other.TotalModsCount) mods)" }
+                $col = if ($other.FlaggedModsCount -gt 0) { "Red" } else { "DarkGray" }
+                Write-Host "    * [$($other.Launcher)] $($other.Profile) -> $statusFlag | Last: $($other.LastPlayedTime)" -ForegroundColor $col
             }
+            Write-Host ""
         }
 
-        $Global:ReportData.LastPlayedInstance = [ordered]@{
-            Launcher         = $lastPlayed.Launcher
-            LauncherName     = $lastPlayed.Launcher
-            Profile          = $lastPlayed.Profile
-            ProfileName      = $lastPlayed.Profile
-            Version          = $lastPlayed.Version
-            Path             = $lastPlayed.Path
-            LogFile          = $lastPlayed.LogFile
-            LastPlayed       = $lastPlayed.LastPlayed.ToString("yyyy-MM-dd HH:mm:ss")
-            LastPlayedTime   = $lastPlayed.LastPlayed.ToString("yyyy-MM-dd HH:mm:ss")
-            ConnectedServers = $connectedServers
+        if ($lastPlayed.ConnectedServers.Count -gt 0) {
+            Write-Alert -Level "INFO" -Message "Connected servers identified in target session" -Detail ($lastPlayed.ConnectedServers -join ", ")
         }
 
-        # Deep scan all installed mods in this active instance
-        Scan-InstanceMods -InstancePath $lastPlayed.Path -ProfileName $lastPlayed.Profile
+        if ($lastPlayed.FlaggedModsCount -gt 0) {
+            Write-Alert -Level "FLAG" -Message "$($lastPlayed.FlaggedModsCount) cheat/disallowed mod(s) in active profile" -Detail "Profile: $($lastPlayed.Profile)"
+        } else {
+            Write-Alert -Level "OK" -Message "All $($lastPlayed.TotalModsCount) mods passed integrity scan" -Detail "Profile: $($lastPlayed.Profile)"
+        }
     } else {
         Write-Alert -Level "WARN" -Message "Could not detect any Minecraft launchers or instance profiles." -Detail "Minecraft may be installed on a non-standard drive or launched as portable."
     }
@@ -391,101 +888,7 @@ function Scan-InstanceMods {
         [string]$InstancePath,
         [string]$ProfileName
     )
-
-    if (-not $InstancePath -or -not (Test-Path $InstancePath)) { return }
-    $modsFolder = Join-Path $InstancePath "mods"
-    if (-not (Test-Path $modsFolder)) { return }
-
-    Write-Alert -Level "INFO" -Message "Deep scanning installed mods in active profile" -Detail "$modsFolder"
-
-    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
-
-    $modFiles = Get-ChildItem -Path $modsFolder -File -Filter "*.jar" -ErrorAction SilentlyContinue | Sort-Object Name
-    $activeMods = [System.Collections.Generic.List[PSCustomObject]]::new()
-    $flaggedCount = 0
-
-    foreach ($mod in $modFiles) {
-        $isFlagged = $false
-        $reason = "Clean"
-        $category = "CLEAN"
-        $displayName = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
-
-        # 1. Filename pattern matching
-        foreach ($sig in $Global:CheatSignatures) {
-            if ($mod.Name -match "(?i)$sig") {
-                $isFlagged = $true
-                $category = "FLAGGED CHEAT / DISALLOWED"
-                $reason = "Matches cheat / disallowed signature: $sig"
-                break
-            }
-        }
-
-        # 2. Deep inspection inside JAR
-        if (-not $isFlagged) {
-            try {
-                $zip = [System.IO.Compression.ZipFile]::OpenRead($mod.FullName)
-
-                # Check fabric.mod.json / quilt.mod.json / mcmod.info
-                $metaEntry = $zip.GetEntry("fabric.mod.json")
-                if (-not $metaEntry) { $metaEntry = $zip.GetEntry("quilt.mod.json") }
-                if (-not $metaEntry) { $metaEntry = $zip.GetEntry("mcmod.info") }
-
-                if ($metaEntry) {
-                    $stream = $metaEntry.Open()
-                    $reader = [System.IO.StreamReader]::new($stream)
-                    $metaContent = $reader.ReadToEnd()
-                    $reader.Close()
-                    $stream.Close()
-
-                    foreach ($sig in $Global:CheatSignatures) {
-                        if ($metaContent -match "(?i)`"id`"\s*:\s*`"[^`"]*$sig" -or $metaContent -match "(?i)`"name`"\s*:\s*`"[^`"]*$sig") {
-                            $isFlagged = $true
-                            $category = "FLAGGED CHEAT / DISALLOWED"
-                            $reason = "Internal metadata matches signature: $sig"
-                            break
-                        }
-                    }
-                }
-
-                # Check class package entries
-                if (-not $isFlagged) {
-                    foreach ($entry in $zip.Entries) {
-                        $eName = $entry.FullName.ToLower()
-                        if ($eName -match "wurstclient" -or $eName -match "meteordevelopment" -or $eName -match "vape" -or $eName -match "crystaloptimizer" -or $eName -match "anchoroptimizer" -or $eName -match "autoclicker") {
-                            $isFlagged = $true
-                            $category = "FLAGGED CHEAT / DISALLOWED"
-                            $reason = "Internal package contains cheat class: $($entry.FullName)"
-                            break
-                        }
-                    }
-                }
-
-                $zip.Dispose()
-            } catch {}
-        }
-
-        if ($isFlagged) {
-            $flaggedCount++
-            Write-Alert -Level "FLAG" -Message "SUSPICIOUS OR CHEAT MOD DETECTED IN ACTIVE INSTANCE!" -Detail "$($mod.Name) ($reason)"
-        }
-
-        $activeMods.Add([PSCustomObject]@{
-            Name          = $displayName
-            FileName      = $mod.Name
-            FullPath      = $mod.FullName
-            SizeKB        = [math]::Round($mod.Length / 1KB, 1)
-            LastWriteTime = $mod.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
-            IsFlagged     = $isFlagged
-            Category      = $category
-            Reason        = $reason
-        })
-    }
-
-    $Global:ReportData.ActiveInstanceMods = $activeMods
-    if ($flaggedCount -gt 0) {
-        Write-Alert -Level "FLAG" -Message "$flaggedCount cheat/disallowed mod(s) found in active profile" -Detail "Profile: $ProfileName"
-    } else {
-        Write-Alert -Level "OK" -Message "All $($activeMods.Count) installed mods passed initial integrity scan" -Detail "Profile: $ProfileName"
-    }
+    $res = Analyze-InstanceMods -InstancePath $InstancePath -ProfileName $ProfileName
+    $Global:ReportData.ActiveInstanceMods = $res.Mods
+    return $res
 }
-

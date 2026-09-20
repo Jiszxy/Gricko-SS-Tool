@@ -1,6 +1,6 @@
 <#
     Gricko SS Tool - Minimalist Ocean-Style Automated Screenshare GUI
-    Compact Floating Window with Fishbone Logo, Deep Scan, Clean Results & Full Mods Browser
+    Compact Floating Window with Fishbone Logo, Deep Multi-Instance Scan, Dynamic Client/Instance Selector & Full Mods Browser
 #>
 
 function Show-GrickoGui {
@@ -59,6 +59,34 @@ function Show-GrickoGui {
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#161822"/>
+            <Setter Property="Foreground" Value="#F8FAFC"/>
+            <Setter Property="BorderBrush" Value="#2E344A"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+        </Style>
+
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="#161822"/>
+            <Setter Property="Foreground" Value="#F8FAFC"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Style.Triggers>
+                <Trigger Property="IsHighlighted" Value="True">
+                    <Setter Property="Background" Value="#2E1C48"/>
+                    <Setter Property="Foreground" Value="#C084FC"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#3B2667"/>
+                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
 
@@ -127,14 +155,14 @@ function Show-GrickoGui {
                         </Button.Template>
                     </Button>
 
-                    <TextBlock Text="2-Minute Deep PC &amp; All Mods Analysis" Foreground="#475569" FontSize="10.5" HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                    <TextBlock Text="Deep PC, Multi-Client &amp; All Mods Analysis" Foreground="#475569" FontSize="10.5" HorizontalAlignment="Center" Margin="0,14,0,0"/>
                 </StackPanel>
 
                 <!-- VIEW 2: 2-MINUTE PROGRESS SCAN -->
                 <StackPanel Name="ProgressView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440">
                     <Image Name="LogoImgProgress" Width="120" Height="58" HorizontalAlignment="Center" Margin="0,0,0,12" RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock Text="DEEP SCANNING SYSTEM" Foreground="#F8FAFC" FontSize="17" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,2"/>
-                    <TextBlock Text="Thorough inspection of memory, prefetch, BAM &amp; all mods" Foreground="#64748B" FontSize="11" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+                    <TextBlock Text="Analyzing all Minecraft clients, instances, memory &amp; mods" Foreground="#64748B" FontSize="11" HorizontalAlignment="Center" Margin="0,0,0,20"/>
 
                     <Border CornerRadius="8" Height="14" Background="#1B1D26" Margin="0,0,0,12" ClipToBounds="True">
                         <ProgressBar Name="ScanProgress" Height="14" Minimum="0" Maximum="100" Value="0" Background="Transparent" BorderThickness="0">
@@ -151,19 +179,23 @@ function Show-GrickoGui {
                 </StackPanel>
 
                 <!-- VIEW 3: RESULTS SUMMARY -->
-                <StackPanel Name="ResultsView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Width="470">
+                <StackPanel Name="ResultsView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480">
                     <Image Name="LogoImgResults" Width="110" Height="54" HorizontalAlignment="Center" Margin="0,0,0,8" RenderOptions.BitmapScalingMode="HighQuality"/>
                     
                     <TextBlock Name="TxtResultTitle" Text="Scan Complete" Foreground="#F8FAFC" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,2"/>
-                    <TextBlock Name="TxtResultSubtitle" Text="System inspection finished" Foreground="#34D399" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                    <TextBlock Name="TxtResultSubtitle" Text="System &amp; client inspection finished" Foreground="#34D399" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
 
-                    <!-- Client & Last Instance Info Card -->
+                    <!-- Client & Instance Info Card with Dynamic Selector -->
                     <Border Background="#161822" CornerRadius="8" BorderBrush="#25293A" BorderThickness="1" Padding="14,10" Margin="0,0,0,10">
                         <StackPanel>
-                            <DockPanel Margin="0,0,0,4">
-                                <TextBlock Text="ACTIVE / LAST PLAYED MINECRAFT CLIENT" Foreground="#94A3B8" FontSize="10.5" FontWeight="Bold"/>
-                                <TextBlock Name="TxtResultTime" Text="N/A" Foreground="#38BDF8" FontSize="10.5" FontWeight="Bold" HorizontalAlignment="Right"/>
+                            <DockPanel Margin="0,0,0,5">
+                                <TextBlock Text="TARGET CLIENT &amp; INSTANCE" Foreground="#94A3B8" FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center"/>
+                                <TextBlock Name="TxtResultTime" Text="N/A" Foreground="#38BDF8" FontSize="10.5" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                             </DockPanel>
+
+                            <!-- Client / Instance Selector Dropdown -->
+                            <ComboBox Name="CmbResultInstance" Margin="0,2,0,6" Cursor="Hand"/>
+
                             <TextBlock Name="TxtResultClient" Text="Client   : Detecting..." Foreground="#E2E8F0" FontSize="12" FontWeight="SemiBold" Margin="0,1"/>
                             <TextBlock Name="TxtResultProfile" Text="Profile  : Standard" Foreground="#94A3B8" FontSize="11" Margin="0,1"/>
                             <TextBlock Name="TxtResultServer" Text="Server   : None" Foreground="#38BDF8" FontSize="11" Margin="0,1"/>
@@ -171,7 +203,7 @@ function Show-GrickoGui {
                     </Border>
 
                     <!-- Cheat & Mod Detection Result Box -->
-                    <Border Name="DetectionBox" Background="#161822" CornerRadius="8" BorderBrush="#25293A" BorderThickness="1" Padding="14,8" Margin="0,0,0,14">
+                    <Border Name="DetectionBox" Background="#161822" CornerRadius="8" BorderBrush="#25293A" BorderThickness="1" Padding="14,8" Margin="0,0,0,12">
                         <StackPanel HorizontalAlignment="Center">
                             <TextBlock Name="TxtDetectionsBadge" Text="[OK] No Cheats or Suspicious Clients Detected" Foreground="#34D399" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
                             <TextBlock Name="TxtCheatList" Text="" Foreground="#F87171" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,3,0,0" Visibility="Collapsed"/>
@@ -205,27 +237,36 @@ function Show-GrickoGui {
                 </StackPanel>
 
                 <!-- VIEW 4: CLEAN DETAILS VIEW -->
-                <Grid Name="DetailsView" Visibility="Collapsed" Height="360" Margin="4,0">
+                <Grid Name="DetailsView" Visibility="Collapsed" Height="365" Margin="4,0">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                    <DockPanel Grid.Row="0" Margin="0,0,0,6">
                         <TextBlock Text="FORENSIC INSPECTION DETAILS" Foreground="#F8FAFC" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
                         <Button Name="BtnBackFromDetails" Content="&lt;- Back" Background="Transparent" Foreground="#38BDF8" BorderThickness="0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" HorizontalAlignment="Right"/>
                     </DockPanel>
 
-                    <Border Grid.Row="1" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="12">
+                    <!-- Client & Instance Chooser in Details -->
+                    <Border Grid.Row="1" Background="#161822" CornerRadius="6" BorderBrush="#25293A" BorderThickness="1" Padding="8,4" Margin="0,0,0,6">
+                        <DockPanel>
+                            <TextBlock Text="TARGET INSTANCE:" Foreground="#818CF8" FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox Name="CmbDetailsInstance" Cursor="Hand"/>
+                        </DockPanel>
+                    </Border>
+
+                    <Border Grid.Row="2" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="12">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Name="DetailsContentPanel">
-                                <!-- Populated dynamically -->
+                                <!-- Populated dynamically based on selected client/instance -->
                             </StackPanel>
                         </ScrollViewer>
                     </Border>
 
-                    <DockPanel Grid.Row="2" Margin="0,8,0,0">
+                    <DockPanel Grid.Row="3" Margin="0,6,0,0">
                         <TextBlock Name="TxtSummaryStats" Text="Clean Forensics" Foreground="#64748B" FontSize="11" VerticalAlignment="Center"/>
                         <Button Name="BtnExportJson" Content="Export Full JSON" Height="26" Padding="12,0" Background="#1A1D27" Foreground="#C084FC" BorderThickness="0" FontSize="11" FontWeight="SemiBold" Cursor="Hand" HorizontalAlignment="Right">
                             <Button.Resources>
@@ -238,8 +279,9 @@ function Show-GrickoGui {
                 </Grid>
 
                 <!-- VIEW 5: ALL INSTALLED MODS BROWSER -->
-                <Grid Name="ModsView" Visibility="Collapsed" Height="360" Margin="4,0">
+                <Grid Name="ModsView" Visibility="Collapsed" Height="365" Margin="4,0">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
@@ -254,8 +296,16 @@ function Show-GrickoGui {
                         <Button Name="BtnBackFromMods" Content="&lt;- Back" Background="Transparent" Foreground="#38BDF8" BorderThickness="0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </DockPanel>
 
+                    <!-- Client & Instance Switcher in Mods View -->
+                    <Border Grid.Row="1" Background="#161822" CornerRadius="6" BorderBrush="#25293A" BorderThickness="1" Padding="8,3" Margin="0,0,0,6">
+                        <DockPanel>
+                            <TextBlock Text="INSTANCE:" Foreground="#818CF8" FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <ComboBox Name="CmbModsInstance" Cursor="Hand"/>
+                        </DockPanel>
+                    </Border>
+
                     <!-- Filter / Search Box -->
-                    <Border Grid.Row="1" Background="#161822" CornerRadius="6" BorderBrush="#262A38" BorderThickness="1" Padding="10,4" Margin="0,0,0,8">
+                    <Border Grid.Row="2" Background="#161822" CornerRadius="6" BorderBrush="#262A38" BorderThickness="1" Padding="10,4" Margin="0,0,0,6">
                         <DockPanel>
                             <TextBlock Text="Search:" Foreground="#64748B" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox Name="TxtModSearch" Background="Transparent" Foreground="#F1F5F9" BorderThickness="0" FontSize="11.5" VerticalAlignment="Center"/>
@@ -263,7 +313,7 @@ function Show-GrickoGui {
                     </Border>
 
                     <!-- Mods List ScrollViewer -->
-                    <Border Grid.Row="2" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="8">
+                    <Border Grid.Row="3" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="8">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Name="ModsListPanel">
                                 <!-- Populated dynamically with clean mod cards -->
@@ -271,7 +321,7 @@ function Show-GrickoGui {
                         </ScrollViewer>
                     </Border>
 
-                    <DockPanel Grid.Row="3" Margin="0,6,0,0">
+                    <DockPanel Grid.Row="4" Margin="0,6,0,0">
                         <TextBlock Name="TxtModsSummaryStats" Text="0 Mods Installed" Foreground="#64748B" FontSize="11" VerticalAlignment="Center"/>
                         <TextBlock Name="TxtModsFlaggedCount" Text="" Foreground="#EF4444" FontSize="11" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </DockPanel>
@@ -326,6 +376,10 @@ function Show-GrickoGui {
     $txtResultProfile  = $window.FindName("TxtResultProfile")
     $txtResultServer   = $window.FindName("TxtResultServer")
 
+    $cmbResultInstance = $window.FindName("CmbResultInstance")
+    $cmbDetailsInstance= $window.FindName("CmbDetailsInstance")
+    $cmbModsInstance   = $window.FindName("CmbModsInstance")
+
     $detectionBox      = $window.FindName("DetectionBox")
     $txtDetectionsBadge= $window.FindName("TxtDetectionsBadge")
     $txtCheatList      = $window.FindName("TxtCheatList")
@@ -348,7 +402,7 @@ function Show-GrickoGui {
         $logoImgResults.Source = $logoSrc
     }
 
-    # FREE WINDOW DRAGGING FROM ANYWHERE
+    # Free Window Dragging
     $dragAction = {
         param($sender, $e)
         if ($e.LeftButton -eq [System.Windows.Input.MouseButtonState]::Pressed) {
@@ -429,7 +483,7 @@ function Show-GrickoGui {
         $tbLbl.Text = $Label
         $tbLbl.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#64748B")
         $tbLbl.FontWeight = [System.Windows.FontWeights]::Bold
-        $tbLbl.Width = 90
+        $tbLbl.Width = 95
         $tbLbl.FontSize = 11.5
         [System.Windows.Controls.DockPanel]::SetDock($tbLbl, [System.Windows.Controls.Dock]::Left)
         $sp.Children.Add($tbLbl) | Out-Null
@@ -451,42 +505,42 @@ function Show-GrickoGui {
 
         $mods = $Global:ReportData.ActiveInstanceMods
         if (-not $mods -or $mods.Count -eq 0) {
-            $tbNone = [System.Windows.Controls.TextBlock]::new()
-            $tbNone.Text = "No mods found in the active Minecraft profile."
-            $tbNone.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#94A3B8")
-            $tbNone.FontSize = 12
-            $tbNone.Margin = [System.Windows.Thickness]::new(8, 12, 8, 8)
-            $modsListPanel.Children.Add($tbNone) | Out-Null
+            $tbEmpty = [System.Windows.Controls.TextBlock]::new()
+            $tbEmpty.Text = "No mods found for this instance."
+            $tbEmpty.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#64748B")
+            $tbEmpty.FontSize = 11.5
+            $tbEmpty.HorizontalAlignment = [System.Windows.HorizontalAlignment]::Center
+            $tbEmpty.Margin = [System.Windows.Thickness]::new(0, 30, 0, 0)
+            $modsListPanel.Children.Add($tbEmpty) | Out-Null
             return
         }
 
-        # Sort flagged mods first, then alphabetically
-        $sortedMods = $mods | Sort-Object { if ($_.IsFlagged) { 0 } else { 1 } }, Name
+        $filteredMods = if ($Filter) {
+            $mods | Where-Object { $_.Name -like "*$Filter*" -or $_.FileName -like "*$Filter*" -or $_.Reason -like "*$Filter*" }
+        } else {
+            $mods
+        }
+
+        # Sort: Known cheats first, then AI-flagged by risk score, then low-risk, then clean alphabetical
+        $sortedMods = $filteredMods | Sort-Object -Property @{
+            Expression = {
+                if ($_.IsFlagged -and $_.Category -notlike "*HEURISTIC*") { 3 }
+                elseif ($_.Category -like "*HEURISTIC*") { 2 }
+                elseif ($_.Category -like "*LOW RISK*") { 1 }
+                else { 0 }
+            }; Descending = $true
+        }, @{ Expression = { if ($_.AIRiskScore) { $_.AIRiskScore } else { 0 } }; Descending = $true },
+           @{ Expression = { $_.Name }; Descending = $false }
+
 
         foreach ($mod in $sortedMods) {
-            if ($Filter) {
-                $matchesFilter = ($mod.Name -like "*$Filter*") -or ($mod.FileName -like "*$Filter*") -or ($mod.Reason -like "*$Filter*")
-                if (-not $matchesFilter) { continue }
-            }
-
             $card = [System.Windows.Controls.Border]::new()
             $card.CornerRadius = [System.Windows.CornerRadius]::new(6)
-            $card.Margin = [System.Windows.Thickness]::new(0, 0, 0, 6)
             $card.Padding = [System.Windows.Thickness]::new(10, 8, 10, 8)
+            $card.Margin = [System.Windows.Thickness]::new(0, 0, 0, 6)
 
             $cardStack = [System.Windows.Controls.StackPanel]::new()
-
             $headerDock = [System.Windows.Controls.DockPanel]::new()
-            $headerDock.Margin = [System.Windows.Thickness]::new(0, 0, 0, 2)
-
-            $badge = [System.Windows.Controls.Border]::new()
-            $badge.CornerRadius = [System.Windows.CornerRadius]::new(4)
-            $badge.Padding = [System.Windows.Thickness]::new(6, 1, 6, 1)
-            [System.Windows.Controls.DockPanel]::SetDock($badge, [System.Windows.Controls.Dock]::Right)
-
-            $tbBadge = [System.Windows.Controls.TextBlock]::new()
-            $tbBadge.FontSize = 10
-            $tbBadge.FontWeight = [System.Windows.FontWeights]::Bold
 
             $tbName = [System.Windows.Controls.TextBlock]::new()
             $tbName.Text = $mod.FileName
@@ -494,22 +548,56 @@ function Show-GrickoGui {
             $tbName.FontWeight = [System.Windows.FontWeights]::SemiBold
             $tbName.TextTrimming = [System.Windows.TextTrimming]::CharacterEllipsis
 
-            if ($mod.IsFlagged) {
-                $card.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#2A1218")
-                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#991B1B")
+            $badge = [System.Windows.Controls.Border]::new()
+            $badge.CornerRadius = [System.Windows.CornerRadius]::new(4)
+            $badge.Padding = [System.Windows.Thickness]::new(6, 1, 6, 1)
+            [System.Windows.Controls.DockPanel]::SetDock($badge, [System.Windows.Controls.Dock]::Right)
+
+            $tbBadge = [System.Windows.Controls.TextBlock]::new()
+            $tbBadge.FontSize = 9.5
+            $tbBadge.FontWeight = [System.Windows.FontWeights]::Bold
+
+            $isAiHeuristic  = ($mod.Category -like "*HEURISTIC*")
+            $isLowRisk      = ($mod.Category -like "*LOW RISK*")
+
+            if ($mod.IsFlagged -and -not $isAiHeuristic) {
+                # Known cheat signature — Red
+                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#2A1215")
+                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7F1D1D")
                 $card.BorderThickness = [System.Windows.Thickness]::new(1)
-                $badge.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7F1D1D")
-                $tbBadge.Text = "SUSPICIOUS / CHEAT"
+                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7F1D1D")
+                $tbBadge.Text      = "KNOWN CHEAT"
                 $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FCA5A5")
-                $tbName.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
+                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
+            } elseif ($isAiHeuristic) {
+                # AI heuristic risk — Orange
+                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#271810")
+                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#92400E")
+                $card.BorderThickness = [System.Windows.Thickness]::new(1)
+                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#92400E")
+                $riskScore = if ($mod.AIRiskScore) { " ($($mod.AIRiskScore)/99)" } else { "" }
+                $tbBadge.Text      = "AI RISK$riskScore"
+                $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FCD34D")
+                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FB923C")
+            } elseif ($isLowRisk) {
+                # Low risk / review — Yellow
+                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#1C1900")
+                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#713F12")
+                $card.BorderThickness = [System.Windows.Thickness]::new(1)
+                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#713F12")
+                $riskScore = if ($mod.AIRiskScore) { " ($($mod.AIRiskScore)/99)" } else { "" }
+                $tbBadge.Text      = "REVIEW$riskScore"
+                $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FEF08A")
+                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#EAB308")
             } else {
-                $card.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#131620")
+                # Clean — Green
+                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#131620")
                 $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#1E2330")
                 $card.BorderThickness = [System.Windows.Thickness]::new(1)
-                $badge.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#064E3B")
-                $tbBadge.Text = "CLEAN"
+                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#064E3B")
+                $tbBadge.Text      = "CLEAN"
                 $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#6EE7B7")
-                $tbName.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#E2E8F0")
+                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#E2E8F0")
             }
 
             $badge.Child = $tbBadge
@@ -517,13 +605,27 @@ function Show-GrickoGui {
             $headerDock.Children.Add($tbName) | Out-Null
             $cardStack.Children.Add($headerDock) | Out-Null
 
-            if ($mod.IsFlagged) {
+            if ($mod.IsFlagged -or $isAiHeuristic -or $isLowRisk) {
                 $tbReason = [System.Windows.Controls.TextBlock]::new()
-                $tbReason.Text = "[!] " + $mod.Reason
-                $tbReason.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FBBF24")
+                $prefix = if ($mod.IsFlagged -and -not $isAiHeuristic) { "[!] " } elseif ($isAiHeuristic) { "[AI] " } else { "[?] " }
+                $tbReason.Text = $prefix + $mod.Reason
+                $reasonColor = if ($mod.IsFlagged -and -not $isAiHeuristic) { "#FBBF24" } elseif ($isAiHeuristic) { "#FB923C" } else { "#EAB308" }
+                $tbReason.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($reasonColor)
                 $tbReason.FontSize = 10.5
-                $tbReason.Margin = [System.Windows.Thickness]::new(0, 2, 0, 2)
+                $tbReason.TextWrapping = [System.Windows.TextWrapping]::Wrap
+                $tbReason.Margin = [System.Windows.Thickness]::new(0, 2, 0, 1)
                 $cardStack.Children.Add($tbReason) | Out-Null
+
+                # Show additional AI analysis details if present
+                if ($mod.AIDetails -and $mod.AIDetails.Length -gt 0) {
+                    $tbAI = [System.Windows.Controls.TextBlock]::new()
+                    $tbAI.Text = "AI Analysis: " + $mod.AIDetails
+                    $tbAI.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#94A3B8")
+                    $tbAI.FontSize = 10
+                    $tbAI.TextWrapping = [System.Windows.TextWrapping]::Wrap
+                    $tbAI.Margin = [System.Windows.Thickness]::new(0, 1, 0, 1)
+                    $cardStack.Children.Add($tbAI) | Out-Null
+                }
             }
 
             $tbMeta = [System.Windows.Controls.TextBlock]::new()
@@ -542,7 +644,129 @@ function Show-GrickoGui {
         Render-ModsList -Filter $txtModSearch.Text.Trim()
     })
 
-    # 2-Minute Deep Scan Runner
+    # Render Forensic Details for Chosen Instance
+    $script:cachedActualCheats = @()
+
+    function Render-DetailsForInstance {
+        param([PSCustomObject]$inst)
+
+        $detailsContentPanel.Children.Clear()
+        if (-not $inst) { return }
+
+        Add-CleanSectionHeader "CHOSEN MINECRAFT INSTANCE & SESSION"
+        Add-CleanRow "Client"   $inst.Launcher "#38BDF8"
+        Add-CleanRow "Profile"  $inst.Profile "#E2E8F0"
+        if ($inst.Version) { Add-CleanRow "Version"  $inst.Version "#E2E8F0" }
+        Add-CleanRow "Played"   $inst.LastPlayedTime "#34D399"
+        Add-CleanRow "Path"     $inst.Path "#94A3B8"
+        if ($inst.ConnectedServers -and $inst.ConnectedServers.Count -gt 0) {
+            Add-CleanRow "Server"   ($inst.ConnectedServers -join ", ") "#38BDF8"
+        } else {
+            Add-CleanRow "Server"   "Singleplayer / Unrecorded" "#64748B"
+        }
+
+        if ($inst.IsLogWiped) {
+            Add-CleanRow "Log File" "LOG WAS WIPED / 0 BYTES (ALERT!)" "#EF4444"
+        } elseif ($inst.SuspiciousLog -and $inst.SuspiciousLog.Count -gt 0) {
+            Add-CleanRow "Log Hits" "$($inst.SuspiciousLog.Count) suspicious lines identified" "#FBBF24"
+        } else {
+            Add-CleanRow "Log Status" "Normal session log integrity" "#34D399"
+        }
+
+        Add-CleanSectionHeader "INSTANCE MODS ($($inst.TotalModsCount) TOTAL)"
+        Add-CleanRow "Installed" "$($inst.TotalModsCount) mod jar(s) in profile" "#38BDF8"
+        if ($inst.FlaggedModsCount -gt 0) {
+            Add-CleanRow "Suspicious" "$($inst.FlaggedModsCount) cheat mod(s) flagged!" "#EF4444"
+            foreach ($fm in $inst.FlaggedMods) {
+                Add-CleanRow " - Flagged" "$($fm.FileName) ($($fm.Reason))" "#FBBF24"
+            }
+        } else {
+            Add-CleanRow "Integrity" "All $($inst.TotalModsCount) mods passed integrity scan" "#34D399"
+        }
+
+        # Summary of All Other Discovered Instances on PC
+        if ($Global:ReportData.AllInstances -and $Global:ReportData.AllInstances.Count -gt 1) {
+            Add-CleanSectionHeader "ALL DISCOVERED CLIENTS & PROFILES ($($Global:ReportData.AllInstances.Count) TOTAL)"
+            foreach ($other in $Global:ReportData.AllInstances) {
+                $stColor = if ($other.FlaggedModsCount -gt 0) { "#EF4444" } else { "#34D399" }
+                $stDesc = if ($other.FlaggedModsCount -gt 0) { "[!] $($other.FlaggedModsCount) CHEAT MODS | $($other.TotalModsCount) mods" } else { "Clean ($($other.TotalModsCount) mods)" }
+                Add-CleanRow "[$($other.Launcher)]" "$($other.Profile) -> $stDesc" $stColor
+            }
+        }
+
+        # Global Cheat & Suspicious Artifacts (Prefetch, BAM, and flagged files)
+        Add-CleanSectionHeader "SYSTEM CHEAT & SUSPICIOUS ARTIFACTS"
+        if ($script:cachedActualCheats.Count -gt 0) {
+            $shownFiles = @()
+            foreach ($c in $script:cachedActualCheats) {
+                if ($c.File -notin $shownFiles) {
+                    $shownFiles += $c.File
+                    Add-CleanRow "File"     $c.File "#EF4444"
+                    if ($c.Path) { Add-CleanRow "Location" $c.Path "#94A3B8" }
+                    if ($c.Time) { Add-CleanRow "Activity" "Executed / Modified $c.Time" "#FBBF24" }
+                }
+            }
+        } else {
+            Add-CleanRow "Status" "Clean: No cheat files or blacklisted loaders detected on this PC." "#34D399"
+        }
+    }
+
+    # Synchronize Active Instance across Results, Details, and Mods Views
+    $script:isSyncingInstance = $false
+
+    function Sync-SelectedInstance([int]$idx) {
+        if ($script:isSyncingInstance) { return }
+        if (-not $Global:ReportData.AllInstances -or $idx -lt 0 -or $idx -ge $Global:ReportData.AllInstances.Count) { return }
+
+        $script:isSyncingInstance = $true
+        try {
+            $targetInst = $Global:ReportData.AllInstances[$idx]
+            $Global:ReportData.LastPlayedInstance = $targetInst
+            $Global:ReportData.ActiveInstanceMods = $targetInst.Mods
+
+            # Sync Dropdown controls
+            if ($cmbResultInstance.SelectedIndex -ne $idx) { $cmbResultInstance.SelectedIndex = $idx }
+            if ($cmbDetailsInstance.SelectedIndex -ne $idx) { $cmbDetailsInstance.SelectedIndex = $idx }
+            if ($cmbModsInstance.SelectedIndex -ne $idx) { $cmbModsInstance.SelectedIndex = $idx }
+
+            # Update Results Card
+            $txtResultTime.Text = if ($targetInst.LastPlayedTime) { "$($targetInst.LastPlayedTime)" } else { "Historical" }
+            $txtResultClient.Text = "Client   : $($targetInst.Launcher)"
+            $verDisplay = if ($targetInst.Version) { " ($($targetInst.Version))" } else { "" }
+            $txtResultProfile.Text = "Profile  : $($targetInst.Profile)$verDisplay"
+            if ($targetInst.ConnectedServers -and $targetInst.ConnectedServers.Count -gt 0) {
+                $txtResultServer.Text = "Server   : $($targetInst.ConnectedServers -join ', ')"
+            } else {
+                $txtResultServer.Text = "Server   : Singleplayer / Unrecorded"
+            }
+
+            # Update Mods Button & View
+            $btnMods.Content = "ALL MODS ($($targetInst.TotalModsCount))"
+            $txtModsTitle.Text = "INSTALLED MODS ($($targetInst.TotalModsCount))"
+            $txtModsSubtitle.Text = "[$($targetInst.Launcher)] $($targetInst.Profile)"
+            $txtModsSummaryStats.Text = "$($targetInst.TotalModsCount) mods in $($targetInst.Profile)"
+            if ($targetInst.FlaggedModsCount -gt 0) {
+                $txtModsFlaggedCount.Text = "[!] $($targetInst.FlaggedModsCount) Flagged Suspicious"
+                $txtModsFlaggedCount.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#EF4444")
+            } else {
+                $txtModsFlaggedCount.Text = "[OK] All Mods Clean"
+                $txtModsFlaggedCount.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#34D399")
+            }
+            Render-ModsList -Filter $txtModSearch.Text.Trim()
+
+            # Update Details Panel
+            Render-DetailsForInstance -inst $targetInst
+        } finally {
+            $script:isSyncingInstance = $false
+        }
+    }
+
+    # Hook ComboBox selection events
+    $cmbResultInstance.Add_SelectionChanged({ Sync-SelectedInstance $cmbResultInstance.SelectedIndex })
+    $cmbDetailsInstance.Add_SelectionChanged({ Sync-SelectedInstance $cmbDetailsInstance.SelectedIndex })
+    $cmbModsInstance.Add_SelectionChanged({ Sync-SelectedInstance $cmbModsInstance.SelectedIndex })
+
+    # Deep Scan Runner
     $btnScan.Add_Click({
         $homeView.Visibility = [System.Windows.Visibility]::Collapsed
         $progressView.Visibility = [System.Windows.Visibility]::Visible
@@ -557,6 +781,7 @@ function Show-GrickoGui {
         $Global:ReportData.CheatClients = @()
         $Global:ReportData.LegitClients = @()
         $Global:ReportData.ActiveInstanceMods = @()
+        $Global:ReportData.AllInstances = @()
 
         # Step 1: Memory & Active Process Inspection (0% to 15% - ~18s)
         for ($pct = 1; $pct -le 15; $pct++) {
@@ -572,7 +797,7 @@ function Show-GrickoGui {
         Scan-LastPlayedInstance
         for ($pct = 16; $pct -le 35; $pct++) {
             $scanProgress.Value = $pct
-            $txtProgressStatus.Text = "Deep scanning Minecraft instances & all installed mods... - $pct%"
+            $txtProgressStatus.Text = "Deep scanning all Minecraft clients & instances... - $pct%"
             Pump-WpfEvents
             Start-Sleep -Milliseconds 1200
         }
@@ -617,55 +842,7 @@ function Show-GrickoGui {
             Start-Sleep -Milliseconds 1200
         }
 
-        # Format Clean Results
-        $inst = $Global:ReportData.LastPlayedInstance
-        $timeStr = $null
-        $launcherStr = $null
-        $profileStr = "Standard Profile"
-        $versionStr = ""
-
-        if ($inst) {
-            $timeStr = if ($inst.LastPlayedTime) { $inst.LastPlayedTime } elseif ($inst.LastPlayed) { $inst.LastPlayed } else { $null }
-            $launcherStr = if ($inst.LauncherName) { $inst.LauncherName } elseif ($inst.Launcher) { $inst.Launcher } else { $null }
-            $profileStr = if ($inst.ProfileName) { $inst.ProfileName } elseif ($inst.Profile) { $inst.Profile } else { "Standard Profile" }
-            $versionStr = if ($inst.Version) { $inst.Version } else { "" }
-        }
-
-        # Fallback 1: Active running Java/Minecraft process
-        if (-not $launcherStr -and $Global:ReportData.JavaProcesses -and $Global:ReportData.JavaProcesses.Count -gt 0) {
-            $jp = $Global:ReportData.JavaProcesses[0]
-            $launcherStr = "Active Java (PID $($jp.ProcessId))"
-            $timeStr = "Running Right Now"
-            $profileStr = "Active Game Session"
-        }
-
-        # Fallback 2: Check any prefetch/BAM traces
-        if (-not $launcherStr) {
-            $pfMatch = $Global:Findings | Where-Object { $_.Detail -like "*javaw.exe*" -or $_.Detail -like "*minecraft.exe*" -or $_.Detail -like "*lunar*" -or $_.Detail -like "*feather*" -or $_.Detail -like "*badlion*" } | Select-Object -First 1
-            if ($pfMatch) {
-                $launcherStr = "Minecraft (Prefetch / BAM Trace)"
-                $timeStr = "Recent Execution Trace"
-                $profileStr = "Historical Instance"
-            }
-        }
-
-        if ($launcherStr) {
-            $txtResultTime.Text = if ($timeStr) { "$timeStr" } else { "Active / Recent" }
-            $txtResultClient.Text = "Client   : $launcherStr"
-            $txtResultProfile.Text = if ($versionStr -and $versionStr -ne "Unknown") { "Profile  : $profileStr ($versionStr)" } else { "Profile  : $profileStr" }
-            if ($inst -and $inst.ConnectedServers -and $inst.ConnectedServers.Count -gt 0) {
-                $txtResultServer.Text = "Server   : $($inst.ConnectedServers -join ', ')"
-            } else {
-                $txtResultServer.Text = "Server   : Singleplayer / Unrecorded"
-            }
-        } else {
-            $txtResultTime.Text = "No Instance Found"
-            $txtResultClient.Text = "Client   : No Minecraft installation detected"
-            $txtResultProfile.Text = "Profile  : N/A"
-            $txtResultServer.Text = "Server   : N/A"
-        }
-
-        # Filter actual cheat detections (Prestige, Grim, Vape, Drip, Slinky, Raven, Crystal/Anchor Optimizers, etc.)
+        # Collect all system-level cheat detections (Prefetch, BAM, FileSystem, etc.)
         $actualCheats = [System.Collections.Generic.List[PSCustomObject]]::new()
         foreach ($f in $Global:Findings) {
             if ($f.Level -eq "FLAG") {
@@ -704,75 +881,58 @@ function Show-GrickoGui {
             }
         }
 
-        # Also add any flagged mods from the active instance to the cheats list
-        $activeMods = $Global:ReportData.ActiveInstanceMods
-        $flaggedMods = $activeMods | Where-Object { $_.IsFlagged }
-        foreach ($fm in $flaggedMods) {
-            $actualCheats.Add([PSCustomObject]@{
-                File   = $fm.FileName
-                Path   = $fm.FullPath
-                Time   = $fm.LastWriteTime
-                Reason = $fm.Reason
-            })
-        }
-
-        # Update Mods Button Count & Subtitles
-        $totalModCount = if ($activeMods) { $activeMods.Count } else { 0 }
-        $flaggedModCount = if ($flaggedMods) { $flaggedMods.Count } else { 0 }
-        $btnMods.Content = "ALL MODS ($totalModCount)"
-        $txtModsTitle.Text = "INSTALLED MODS ($totalModCount)"
-        $txtModsSubtitle.Text = "Profile: $profileStr"
-        $txtModsSummaryStats.Text = "$totalModCount mods installed in profile"
-        if ($flaggedModCount -gt 0) {
-            $txtModsFlaggedCount.Text = "[!] $flaggedModCount Flagged Suspicious"
-        } else {
-            $txtModsFlaggedCount.Text = "[OK] All Mods Clean"
-            $txtModsFlaggedCount.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#34D399")
-        }
-
-        # Pre-render the mods list
-        Render-ModsList
-
-        # Build Clean Details List (No codes, no bible, just human summary)
-        $detailsContentPanel.Children.Clear()
-
-        Add-CleanSectionHeader "MINECRAFT INSTANCE & SESSION"
-        Add-CleanRow "Client"   $launcherStr "#38BDF8"
-        Add-CleanRow "Profile"  $profileStr "#E2E8F0"
-        Add-CleanRow "Played"   $timeStr "#34D399"
-        if ($txtResultServer.Text -ne "Server   : None" -and $txtResultServer.Text -ne "Server   : N/A") {
-            $srvText = if ($inst -and $inst.ConnectedServers) { $inst.ConnectedServers -join ", " } else { "Singleplayer" }
-            Add-CleanRow "Server"   $srvText "#38BDF8"
-        }
-
-        Add-CleanSectionHeader "FLAGGED CHEAT & SUSPICIOUS FILES"
-        if ($actualCheats.Count -gt 0) {
-            $shownFiles = @()
-            foreach ($c in $actualCheats) {
-                if ($c.File -notin $shownFiles) {
-                    $shownFiles += $c.File
-                    Add-CleanRow "File"     $c.File "#EF4444"
-                    if ($c.Path) { Add-CleanRow "Location" $c.Path "#94A3B8" }
-                    if ($c.Time) { Add-CleanRow "Activity" "Executed / Modified $c.Time" "#FBBF24" }
+        # Include flagged mods across ALL instances so no cheat mod is ever missed
+        if ($Global:ReportData.AllInstances) {
+            foreach ($inst in $Global:ReportData.AllInstances) {
+                if ($inst.FlaggedMods) {
+                    foreach ($fm in $inst.FlaggedMods) {
+                        $actualCheats.Add([PSCustomObject]@{
+                            File   = $fm.FileName
+                            Path   = $fm.FullPath
+                            Time   = $fm.LastWriteTime
+                            Reason = "[$($inst.Launcher) / $($inst.Profile)] $($fm.Reason)"
+                        })
+                    }
                 }
             }
-        } else {
-            Add-CleanRow "Status" "Clean: No cheat files or blacklisted loaders detected on this PC." "#34D399"
         }
 
-        Add-CleanSectionHeader "MODS CATEGORY ($totalModCount TOTAL)"
-        Add-CleanRow "Profile"  "$profileStr" "#E2E8F0"
-        Add-CleanRow "Installed" "$totalModCount mod jars present" "#38BDF8"
-        if ($flaggedModCount -gt 0) {
-            Add-CleanRow "Suspicious" "$flaggedModCount suspicious mod(s) detected!" "#EF4444"
-            foreach ($fm in $flaggedMods) {
-                Add-CleanRow " - Flagged" "$($fm.FileName) ($($fm.Reason))" "#FBBF24"
+        $script:cachedActualCheats = $actualCheats
+
+        # Populate Instance Selector Dropdowns
+        $script:isSyncingInstance = $true
+        $cmbResultInstance.Items.Clear()
+        $cmbDetailsInstance.Items.Clear()
+        $cmbModsInstance.Items.Clear()
+
+        $allInst = $Global:ReportData.AllInstances
+        if ($allInst -and $allInst.Count -gt 0) {
+            foreach ($inst in $allInst) {
+                $statusTag = if ($inst.FlaggedModsCount -gt 0) {
+                    " [!] $($inst.FlaggedModsCount) CHEAT MODS"
+                } elseif ($inst.TotalModsCount -gt 0) {
+                    " ($($inst.TotalModsCount) mods)"
+                } else {
+                    " (0 mods)"
+                }
+
+                $displayText = "[$($inst.Launcher)] $($inst.Profile)$statusTag"
+                $cmbResultInstance.Items.Add($displayText) | Out-Null
+                $cmbDetailsInstance.Items.Add($displayText) | Out-Null
+                $cmbModsInstance.Items.Add($displayText) | Out-Null
             }
+            $script:isSyncingInstance = $false
+            Sync-SelectedInstance 0
         } else {
-            Add-CleanRow "Integrity" "All $totalModCount mods passed integrity check" "#34D399"
+            $script:isSyncingInstance = $false
+            $txtResultTime.Text = "No Instance Found"
+            $txtResultClient.Text = "Client   : No Minecraft installation detected"
+            $txtResultProfile.Text = "Profile  : N/A"
+            $txtResultServer.Text = "Server   : N/A"
+            $btnMods.Content = "ALL MODS (0)"
         }
 
-        # Main Screen Cheat Badge
+        # Main Screen Cheat Badge Status
         if ($actualCheats.Count -gt 0) {
             $txtResultTitle.Text = "Cheats Detected"
             $txtResultTitle.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
@@ -796,7 +956,7 @@ function Show-GrickoGui {
             $txtCheatList.Visibility = [System.Windows.Visibility]::Collapsed
         }
 
-        $txtSummaryStats.Text = "$($actualCheats.Count) Cheats Flagged | Full 2-Minute PC Deep Scan Finished"
+        $txtSummaryStats.Text = "$($actualCheats.Count) Cheats Flagged | $($allInst.Count) Clients/Instances Discovered"
 
         # Show Results View
         $progressView.Visibility = [System.Windows.Visibility]::Collapsed
