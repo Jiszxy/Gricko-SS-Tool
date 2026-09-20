@@ -112,6 +112,10 @@ function Analyze-InstanceMods {
                    "anchormacro","anchor/macro","doubleanchor","double/anchor")
     $cheatPkgRegex = [regex]::new('(?i)(' + (($cheatPkgs | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')', [System.Text.RegularExpressions.RegexOptions]::Compiled)
 
+    # Generic combat automation and macro class detector (identifies disguised / Trojan mods regardless of package or mod name)
+    $cheatClassRegex = [regex]::new('(?i)(^|[\\/._])(AutoCrystal|AnchorMacro|DoubleAnchor|AutoTotem|MaceAssist|Triggerbot|KillAura|AimAssist|AimBot|ReachMod|ExplodeManager|ExplodeMacro|LungeMacro|HitboxExpand|CrystalAura|FastCrystal|AutoAnchor|MultiKeyBinding|KeyBindingClient|StreamProofOverlay|WebConfigServer|WindChargeAssist|KeyEventManager|AutomatorManager)(Manager|Module|Client|Hack|Cheat|Service|Helper|Impl)?(\.class|\$|_)', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+    $highConfidenceBytecodeRegex = [regex]::new('(?i)\b(MaceAssistManager|AnchorMacroManager|DoubleAnchorManager|AutoCrystalManager|AutoTotemManager|TriggerbotManager|AutomatorManager|LungeMacroManager|ExplodeManager|StreamProofOverlayManager|WebConfigServer|MultiKeyBindingClient)\b', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+
     $suspPats = @(
         "RotationManager","AimAssist","AimBot","lookAt","snapTo","smoothAim",
         "smoothRotate","rotateToEntity","rotateToPlayer","predictRotation",
@@ -284,19 +288,40 @@ function Analyze-InstanceMods {
                         } catch {}
                     }
 
-                    # -- LAYER 4: Known cheat class-path packages ------------------
-                    foreach ($entry in $allEntries) {
-                        if ($cheatPkgRegex.IsMatch($entry.FullName)) {
-                            $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
-                            $reason = "Contains known cheat class package: $($entry.FullName)"; $aiRisk = 100; break
+                    # -- LAYER 4: Known cheat class-path packages & combat automation classes
+                    foreach ($entry in $classEntries) {
+                        $fn = $entry.FullName
+                        if ($cheatClassRegex.IsMatch($fn)) {
+                            $isFlagged = $true
+                            $shortName = [System.IO.Path]::GetFileNameWithoutExtension($fn)
+                            if ($hasMeta) {
+                                $category = "DISGUISED CHEAT / TROJAN MOD"
+                                $reason = "Trojan/Fake mod: disguised as innocent mod but contains combat automation class: $shortName"
+                            } else {
+                                $category = "FLAGGED CHEAT / DISALLOWED"
+                                $reason = "Contains combat automation / macro class: $shortName"
+                            }
+                            $aiRisk = 100
+                            break
+                        }
+                    }
+
+                    if (-not $isFlagged) {
+                        foreach ($entry in $allEntries) {
+                            $fn = $entry.FullName
+                            if ($cheatPkgRegex.IsMatch($fn)) {
+                                $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                                $reason = "Contains known cheat class package: $fn"; $aiRisk = 100; break
+                            }
                         }
                     }
 
                     if (-not $isFlagged) {
 
                         # -- LAYER 5: Suspicious string constants in .class bytecode ---
-                        $checkCount = [Math]::Min(10, $classEntries.Count)
+                        $checkCount = [Math]::Min(25, $classEntries.Count)
                         $strHits    = [System.Collections.Generic.List[string]]::new()
+                        $highHit    = $null
 
                         for ($ci = 0; $ci -lt $checkCount; $ci++) {
                             $ce = $classEntries[$ci]
@@ -305,6 +330,9 @@ function Analyze-InstanceMods {
                                 $readLen = $ces.Read($readBuf, 0, [Math]::Min($ce.Length, 65536))
                                 $ces.Close()
                                 $classAscii = [System.Text.Encoding]::ASCII.GetString($readBuf, 0, $readLen)
+                                if (-not $highHit -and $highConfidenceBytecodeRegex.IsMatch($classAscii)) {
+                                    $highHit = $highConfidenceBytecodeRegex.Match($classAscii).Value
+                                }
                                 $matches = $suspRegex.Matches($classAscii)
                                 foreach ($m in $matches) {
                                     if ($strHits.Count -lt 6 -and -not $strHits.Contains($m.Value)) {
@@ -314,9 +342,19 @@ function Analyze-InstanceMods {
                             } catch {}
                         }
 
-                        if     ($strHits.Count -ge 4) { $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'") }
-                        elseif ($strHits.Count -ge 2) { $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'") }
-                        elseif ($strHits.Count -eq 1) { $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'") }
+                        if ($highHit) {
+                            $isFlagged = $true
+                            if ($hasMeta) {
+                                $category = "DISGUISED CHEAT / TROJAN MOD"
+                                $reason = "Trojan/Fake mod: bytecode contains combat automation hook: $highHit"
+                            } else {
+                                $category = "FLAGGED CHEAT / DISALLOWED"
+                                $reason = "Bytecode contains combat automation hook: $highHit"
+                            }
+                            $aiRisk = 100
+                        } elseif ($strHits.Count -ge 4) { $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'") }
+                        elseif   ($strHits.Count -ge 2) { $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'") }
+                        elseif   ($strHits.Count -eq 1) { $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'") }
 
                         # -- LAYER 6: Obfuscation entropy scoring ------------------
                         if ($classNames.Count -ge 5) {

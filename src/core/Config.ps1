@@ -60,7 +60,7 @@ $Global:CheatSignatures = @(
     "kamiblue", "lambda", "cleanerclient", "thunderhack", "mathax",
 
     # Mace / CPVP / Weapon Exploit Mods (1.21+)
-    "bettermace", "better-mace", "maceassist", "mace-assist", "mace.assist",
+    "maceassist", "mace-assist", "mace.assist",
     "lungemacro", "lunge-macro", "mace.trigger", "macetrigger",
     "cpvpmod", "cpvp-mod", "cpvpclient", "macemod", "maceboost",
     "mace.*optimizer", "windchargemod", "windcharge.*assist",
