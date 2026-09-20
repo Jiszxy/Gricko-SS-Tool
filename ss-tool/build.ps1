@@ -1,0 +1,92 @@
+<#
+.SYNOPSIS
+    Gricko SS Tool - Developer Build & Bundler Utility
+    Packages modular src/ files into dist/gricko-standalone.ps1 for single-file GitHub distribution.
+#>
+
+[CmdletBinding()]
+param()
+
+$baseDir = $PSScriptRoot
+$distDir = Join-Path $baseDir "dist"
+if (-not (Test-Path $distDir)) {
+    New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+}
+
+$targetFile = Join-Path $distDir "gricko-standalone.ps1"
+Write-Host "[*] Building Gricko SS Tool standalone distribution..." -ForegroundColor Cyan
+
+$moduleList = @(
+    "src\core\Config.ps1",
+    "src\core\Logger.ps1",
+    "src\core\Elevator.ps1",
+    "src\modules\InstanceScanner.ps1",
+    "src\modules\ProcessScanner.ps1",
+    "src\modules\PrefetchScanner.ps1",
+    "src\modules\RegistryScanner.ps1",
+    "src\modules\FileSystemScanner.ps1",
+    "src\modules\HardwareScanner.ps1",
+    "src\modules\ReportExporter.ps1"
+)
+
+$bundleContent = [System.Text.StringBuilder]::new()
+
+$header = @'
+<#
+.SYNOPSIS
+    Gricko SS Tool - Standalone Distribution Bundle
+    Ocean-Inspired Purple & Blue Minecraft Forensic Scanner
+#>
+
+[CmdletBinding()]
+param(
+    [switch]$ExportJson,
+    [string]$OutputPath,
+    [switch]$NoElevation,
+    [switch]$NoColor,
+    [int]$HoursPrefetch = 48,
+    [int]$HoursFiles = 24,
+    [int]$HoursBAM = 72
+)
+
+'@
+
+$bundleContent.AppendLine($header) | Out-Null
+
+foreach ($mod in $moduleList) {
+    $fullPath = Join-Path $baseDir $mod
+    if (Test-Path $fullPath) {
+        Write-Host "  -> Bundling $mod" -ForegroundColor DarkCyan
+        $bundleContent.AppendLine("# --- BEGIN MODULE: $mod ---") | Out-Null
+        $content = Get-Content -Path $fullPath -Raw
+        $bundleContent.AppendLine($content) | Out-Null
+        $bundleContent.AppendLine("# --- END MODULE: $mod ---`n") | Out-Null
+    } else {
+        Write-Host "  [!] Missing module: $fullPath" -ForegroundColor Red
+    }
+}
+
+$entrypoint = @'
+# ==============================================================================
+# ENTRY POINT / MAIN ORCHESTRATOR
+# ==============================================================================
+function Start-ForensicScan {
+    Show-Banner
+    Assert-Elevation
+    Scan-LastPlayedInstance
+    Scan-JavaProcesses
+    Scan-PrefetchTraces -Hours $HoursPrefetch
+    Scan-BAMRegistry -Hours $HoursBAM
+    Scan-UserAssist
+    Scan-FileSystem -Hours $HoursFiles
+    Scan-USBStorage
+    Export-Report -ExportJson:$ExportJson -OutputPath $OutputPath
+}
+
+Start-ForensicScan
+'@
+
+$bundleContent.AppendLine($entrypoint) | Out-Null
+
+[System.IO.File]::WriteAllText($targetFile, $bundleContent.ToString(), [System.Text.Encoding]::UTF8)
+Write-Host "[OK] Successfully built standalone distribution -> $targetFile" -ForegroundColor Green

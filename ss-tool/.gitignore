@@ -1,0 +1,16 @@
+# Forensic scan outputs
+*.json
+!test_report.json
+SS_Report_*.json
+Gricko_Report_*.json
+
+# Logs & temp files
+*.log
+*.tmp
+*.bak
+
+# IDE & OS files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
