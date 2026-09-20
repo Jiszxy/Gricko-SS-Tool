@@ -1,5 +1,9 @@
-$Global:ToolName = 'Gricko SS Tool'
-$Global:ToolVersion = '2.1.0'
+<#
+    Gricko SS Tool - Core Configuration & Signature Definitions
+#>
+
+$Global:ToolName = "Gricko SS Tool"
+$Global:ToolVersion = "2.3.0"
 $Global:ScanStartTime = Get-Date
 $Global:Findings = [System.Collections.Generic.List[PSCustomObject]]::new()
 
@@ -7,8 +11,7 @@ $Global:ReportData = [ordered]@{
     Metadata = [ordered]@{
         ToolName        = $Global:ToolName
         Version         = $Global:ToolVersion
-        Theme           = 'Purple-Blue'
-        ScanTimestamp   = $Global:ScanStartTime.ToString('o')
+        ScanTimestamp   = $Global:ScanStartTime.ToString("o")
         HostName        = $env:COMPUTERNAME
         UserName        = "$env:USERDOMAIN\$env:USERNAME"
         OS              = (Get-CimInstance Win32_OperatingSystem).Caption
@@ -23,32 +26,44 @@ $Global:ReportData = [ordered]@{
         Clean    = 0
     }
     LastPlayedInstance = [ordered]@{}
+    CheatClients       = @()
+    LegitClients       = @()
     JavaProcesses      = @()
     PrefetchTraces     = @()
     BAMTraces          = @()
     UserAssistTraces   = @()
+    MuiCacheTraces     = @()
     ModFiles           = @()
     TempFiles          = @()
-    DownloadFiles      = @()
     AntiForensics      = @()
     USBDevices         = @()
 }
 
-$Global:SuspiciousSignatures = @(
-    'vape', 'raven', 'bplus', 'drip', 'slinky', 'koid', 'itami', 'mango', 'breeze', 
-    'dream', 'haru', 'dope', 'entropy', 'whiteout', 'phantom', 'novoline', 'rise', 
-    'tenacity', 'augustus', 'moon', 'badpack', 'liquidbounce', 'aristois', 'wurst', 
-    'meteor', 'inertial', 'sigma', 'flux', 'pandora', 'fdp', 'zeroday', 'impact', 
-    'bleachhack', 'ares', 'sigma5', 'futureclient', 'rusherhack', 'kamiblue', 'lambda',
-    'lambda-client', 'exhibition', 'astolfo', 'cleanerclient', 'skidclient',
-    'autoclicker', 'auto-clicker', 'fastclick', 'speedclick', 'op-autoclicker', 
-    'gs-autoclicker', 'maxclicker', 'murgee', 'forgeclicker', 'ghostclicker', 
-    'jitterclicker', 'butterflyclicker', 'tinytask', 'speedautoclicker', 'clicker',
-    'macrokey', 'rebind', 'x-mouse', 'xmouse', 'autoclick',
-    'processhacker', 'cheatengine', 'x64dbg', 'x32dbg', 'dnspy', 'ilspy', 
-    'bytecodeviewer', 'recaf', 'javadecompiler', 'injector', 'dllinject', 
-    'extremeinjector', 'nativeinjector', 'systeminformer', 'scylla', 'ghidra',
-    'bleachbit', 'ccleaner', 'usndelete', 'journalcleaner', 'privazer', 
-    'eraser', 'sdelete', 'cleanmem', 'ddelete', 'redact', 'stringcleaner',
-    'eventlogcleaner', 'wevtutil'
+# Comprehensive Minecraft Cheat & Ghost Client Signatures
+$Global:CheatSignatures = @(
+    # Ghost & Internal Injection Clients
+    "prestige", "grimclient", "grim-client", "vape", "vapelite", "vapev4",
+    "drip", "driplite", "dripsoft", "slinky", "slinkyloader", "raven", "ravenb", 
+    "ravenweave", "weave-loader", "weave", "entropy", "whiteout", "yukon", 
+    "sapphire", "spectral", "dreamclient", "itami", "lowkey", "skilled", "bape", 
+    "kura", "karma", "breeze", "koid", "phantom", "dope", "haru",
+
+    # Blatant, Anarchy & Utility Cheats
+    "rise", "rise6", "augustus", "novoline", "tenacity", "liquidbounce", 
+    "meteor", "wurst", "aristois", "inertial", "inertia", "sigma", "sigma5", 
+    "futureclient", "future-client", "rusherhack", "rusher", "boze", "abyss", 
+    "coffeeclient", "catwithsword", "doomsday", "fdpclient", "lime", "envy", 
+    "pluto", "exhibition", "astolfo", "zeroday", "impact", "bleachhack", "ares", 
+    "kamiblue", "lambda", "cleanerclient"
 )
+
+# Known Legitimate Launchers & Mod Loaders
+$Global:LegitimateSignatures = @(
+    "lunarclient", "lunar-client", "lunar", "badlion", "badlionclient", 
+    "feather", "featherclient", "modrinth", "theseus", "prismlauncher", 
+    "multimc", "salwyrn", "labymod", "batmod", "cheatbreaker", "minecraft", 
+    "forge", "fabric", "neoforge", "quilt", "optifine"
+)
+
+# Suspicious keywords that match injection or loader evasion
+$Global:SuspiciousSignatures = $Global:CheatSignatures

@@ -3,7 +3,7 @@
 #>
 
 $Global:ToolName = "Gricko SS Tool"
-$Global:ToolVersion = "2.1.0"
+$Global:ToolVersion = "2.3.0"
 $Global:ScanStartTime = Get-Date
 $Global:Findings = [System.Collections.Generic.List[PSCustomObject]]::new()
 
@@ -11,7 +11,6 @@ $Global:ReportData = [ordered]@{
     Metadata = [ordered]@{
         ToolName        = $Global:ToolName
         Version         = $Global:ToolVersion
-        Theme           = "Purple-Blue Aesthetic (Ocean Inspired)"
         ScanTimestamp   = $Global:ScanStartTime.ToString("o")
         HostName        = $env:COMPUTERNAME
         UserName        = "$env:USERDOMAIN\$env:USERNAME"
@@ -27,40 +26,44 @@ $Global:ReportData = [ordered]@{
         Clean    = 0
     }
     LastPlayedInstance = [ordered]@{}
-    JavaProcesses = @()
-    PrefetchTraces = @()
-    BAMTraces = @()
-    UserAssistTraces = @()
-    ModFiles = @()
-    TempFiles = @()
-    DownloadFiles = @()
-    AntiForensics = @()
-    USBDevices = @()
+    CheatClients       = @()
+    LegitClients       = @()
+    JavaProcesses      = @()
+    PrefetchTraces     = @()
+    BAMTraces          = @()
+    UserAssistTraces   = @()
+    MuiCacheTraces     = @()
+    ModFiles           = @()
+    TempFiles          = @()
+    AntiForensics      = @()
+    USBDevices         = @()
 }
 
-# Known Minecraft cheat clients, autoclickers, injection utilities, and cleansers
-$Global:SuspiciousSignatures = @(
-    # Ghost & Blatant Clients
-    "vape", "raven", "bplus", "drip", "slinky", "koid", "itami", "mango", "breeze", 
-    "dream", "haru", "dope", "entropy", "whiteout", "phantom", "novoline", "rise", 
-    "tenacity", "augustus", "moon", "badpack", "liquidbounce", "aristois", "wurst", 
-    "meteor", "inertial", "sigma", "flux", "pandora", "fdp", "zeroday", "impact", 
-    "bleachhack", "ares", "sigma5", "futureclient", "rusherhack", "kamiblue", "lambda",
-    "lambda-client", "exhibition", "astolfo", "cleanerclient", "skidclient",
+# Comprehensive Minecraft Cheat & Ghost Client Signatures
+$Global:CheatSignatures = @(
+    # Ghost & Internal Injection Clients
+    "prestige", "grimclient", "grim-client", "vape", "vapelite", "vapev4",
+    "drip", "driplite", "dripsoft", "slinky", "slinkyloader", "raven", "ravenb", 
+    "ravenweave", "weave-loader", "weave", "entropy", "whiteout", "yukon", 
+    "sapphire", "spectral", "dreamclient", "itami", "lowkey", "skilled", "bape", 
+    "kura", "karma", "breeze", "koid", "phantom", "dope", "haru",
 
-    # Autoclickers & Macros
-    "autoclicker", "auto-clicker", "fastclick", "speedclick", "op-autoclicker", 
-    "gs-autoclicker", "maxclicker", "murgee", "forgeclicker", "ghostclicker", 
-    "jitterclicker", "butterflyclicker", "tinytask", "speedautoclicker", "clicker",
-    "macrokey", "rebind", "x-mouse", "xmouse", "autoclick",
-
-    # Injection & Memory Inspection
-    "processhacker", "cheatengine", "x64dbg", "x32dbg", "dnspy", "ilspy", 
-    "bytecodeviewer", "recaf", "javadecompiler", "injector", "dllinject", 
-    "extremeinjector", "nativeinjector", "systeminformer", "scylla", "ghidra",
-
-    # Anti-Forensics & Cleaners
-    "bleachbit", "ccleaner", "usndelete", "journalcleaner", "privazer", 
-    "eraser", "sdelete", "cleanmem", "ddelete", "redact", "stringcleaner",
-    "eventlogcleaner", "wevtutil"
+    # Blatant, Anarchy & Utility Cheats
+    "rise", "rise6", "augustus", "novoline", "tenacity", "liquidbounce", 
+    "meteor", "wurst", "aristois", "inertial", "inertia", "sigma", "sigma5", 
+    "futureclient", "future-client", "rusherhack", "rusher", "boze", "abyss", 
+    "coffeeclient", "catwithsword", "doomsday", "fdpclient", "lime", "envy", 
+    "pluto", "exhibition", "astolfo", "zeroday", "impact", "bleachhack", "ares", 
+    "kamiblue", "lambda", "cleanerclient"
 )
+
+# Known Legitimate Launchers & Mod Loaders
+$Global:LegitimateSignatures = @(
+    "lunarclient", "lunar-client", "lunar", "badlion", "badlionclient", 
+    "feather", "featherclient", "modrinth", "theseus", "prismlauncher", 
+    "multimc", "salwyrn", "labymod", "batmod", "cheatbreaker", "minecraft", 
+    "forge", "fabric", "neoforge", "quilt", "optifine"
+)
+
+# Suspicious keywords that match injection or loader evasion
+$Global:SuspiciousSignatures = $Global:CheatSignatures

@@ -15,7 +15,7 @@ param(
 #>
 
 $Global:ToolName = "Gricko SS Tool"
-$Global:ToolVersion = "2.1.0"
+$Global:ToolVersion = "2.3.0"
 $Global:ScanStartTime = Get-Date
 $Global:Findings = [System.Collections.Generic.List[PSCustomObject]]::new()
 
@@ -23,7 +23,6 @@ $Global:ReportData = [ordered]@{
     Metadata = [ordered]@{
         ToolName        = $Global:ToolName
         Version         = $Global:ToolVersion
-        Theme           = "Purple-Blue Aesthetic (Ocean Inspired)"
         ScanTimestamp   = $Global:ScanStartTime.ToString("o")
         HostName        = $env:COMPUTERNAME
         UserName        = "$env:USERDOMAIN\$env:USERNAME"
@@ -39,43 +38,47 @@ $Global:ReportData = [ordered]@{
         Clean    = 0
     }
     LastPlayedInstance = [ordered]@{}
-    JavaProcesses = @()
-    PrefetchTraces = @()
-    BAMTraces = @()
-    UserAssistTraces = @()
-    ModFiles = @()
-    TempFiles = @()
-    DownloadFiles = @()
-    AntiForensics = @()
-    USBDevices = @()
+    CheatClients       = @()
+    LegitClients       = @()
+    JavaProcesses      = @()
+    PrefetchTraces     = @()
+    BAMTraces          = @()
+    UserAssistTraces   = @()
+    MuiCacheTraces     = @()
+    ModFiles           = @()
+    TempFiles          = @()
+    AntiForensics      = @()
+    USBDevices         = @()
 }
 
-# Known Minecraft cheat clients, autoclickers, injection utilities, and cleansers
-$Global:SuspiciousSignatures = @(
-    # Ghost & Blatant Clients
-    "vape", "raven", "bplus", "drip", "slinky", "koid", "itami", "mango", "breeze", 
-    "dream", "haru", "dope", "entropy", "whiteout", "phantom", "novoline", "rise", 
-    "tenacity", "augustus", "moon", "badpack", "liquidbounce", "aristois", "wurst", 
-    "meteor", "inertial", "sigma", "flux", "pandora", "fdp", "zeroday", "impact", 
-    "bleachhack", "ares", "sigma5", "futureclient", "rusherhack", "kamiblue", "lambda",
-    "lambda-client", "exhibition", "astolfo", "cleanerclient", "skidclient",
+# Comprehensive Minecraft Cheat & Ghost Client Signatures
+$Global:CheatSignatures = @(
+    # Ghost & Internal Injection Clients
+    "prestige", "grimclient", "grim-client", "vape", "vapelite", "vapev4",
+    "drip", "driplite", "dripsoft", "slinky", "slinkyloader", "raven", "ravenb", 
+    "ravenweave", "weave-loader", "weave", "entropy", "whiteout", "yukon", 
+    "sapphire", "spectral", "dreamclient", "itami", "lowkey", "skilled", "bape", 
+    "kura", "karma", "breeze", "koid", "phantom", "dope", "haru",
 
-    # Autoclickers & Macros
-    "autoclicker", "auto-clicker", "fastclick", "speedclick", "op-autoclicker", 
-    "gs-autoclicker", "maxclicker", "murgee", "forgeclicker", "ghostclicker", 
-    "jitterclicker", "butterflyclicker", "tinytask", "speedautoclicker", "clicker",
-    "macrokey", "rebind", "x-mouse", "xmouse", "autoclick",
-
-    # Injection & Memory Inspection
-    "processhacker", "cheatengine", "x64dbg", "x32dbg", "dnspy", "ilspy", 
-    "bytecodeviewer", "recaf", "javadecompiler", "injector", "dllinject", 
-    "extremeinjector", "nativeinjector", "systeminformer", "scylla", "ghidra",
-
-    # Anti-Forensics & Cleaners
-    "bleachbit", "ccleaner", "usndelete", "journalcleaner", "privazer", 
-    "eraser", "sdelete", "cleanmem", "ddelete", "redact", "stringcleaner",
-    "eventlogcleaner", "wevtutil"
+    # Blatant, Anarchy & Utility Cheats
+    "rise", "rise6", "augustus", "novoline", "tenacity", "liquidbounce", 
+    "meteor", "wurst", "aristois", "inertial", "inertia", "sigma", "sigma5", 
+    "futureclient", "future-client", "rusherhack", "rusher", "boze", "abyss", 
+    "coffeeclient", "catwithsword", "doomsday", "fdpclient", "lime", "envy", 
+    "pluto", "exhibition", "astolfo", "zeroday", "impact", "bleachhack", "ares", 
+    "kamiblue", "lambda", "cleanerclient"
 )
+
+# Known Legitimate Launchers & Mod Loaders
+$Global:LegitimateSignatures = @(
+    "lunarclient", "lunar-client", "lunar", "badlion", "badlionclient", 
+    "feather", "featherclient", "modrinth", "theseus", "prismlauncher", 
+    "multimc", "salwyrn", "labymod", "batmod", "cheatbreaker", "minecraft", 
+    "forge", "fabric", "neoforge", "quilt", "optifine"
+)
+
+# Suspicious keywords that match injection or loader evasion
+$Global:SuspiciousSignatures = $Global:CheatSignatures
 
 
 <#
@@ -1144,8 +1147,8 @@ function Export-Report {
 
 
 <#
-    Gricko SS Tool - Ocean-Inspired Forensic Desktop UI (WPF / XAML)
-    Modern Dark Purple & Blue Aesthetic with Interactive Scan Controls
+    Gricko SS Tool - Minimalist Ocean-Style Automated Screenshare GUI
+    Compact Floating Window with Shark Logo, Centered Progress & Detailed Inspection
 #>
 
 function Show-GrickoGui {
@@ -1160,8 +1163,8 @@ function Show-GrickoGui {
     [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Gricko SS Tool - Ocean Forensic Suite"
-        Height="720" Width="1000"
+        Title="Gricko SS Tool - Advanced Automated Screenshare"
+        Height="440" Width="580"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         AllowsTransparency="True"
@@ -1170,18 +1173,18 @@ function Show-GrickoGui {
 
     <Window.Resources>
         <Style TargetType="ScrollBar">
-            <Setter Property="Width" Value="6"/>
-            <Setter Property="Background" Value="#0F1123"/>
+            <Setter Property="Width" Value="5"/>
+            <Setter Property="Background" Value="#101114"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ScrollBar">
-                        <Grid Background="#0A0B14">
+                        <Grid Background="#101114">
                             <Track x:Name="PART_Track" IsDirectionReversed="true">
                                 <Track.Thumb>
                                     <Thumb>
                                         <Thumb.Template>
                                             <ControlTemplate TargetType="Thumb">
-                                                <Border Background="#3B3F63" CornerRadius="3"/>
+                                                <Border Background="#3A3D4A" CornerRadius="2"/>
                                             </ControlTemplate>
                                         </Thumb.Template>
                                     </Thumb>
@@ -1194,31 +1197,22 @@ function Show-GrickoGui {
         </Style>
     </Window.Resources>
 
-    <Border CornerRadius="12" BorderThickness="1.5">
-        <Border.BorderBrush>
-            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                <GradientStop Color="#8B5CF6" Offset="0.0"/>
-                <GradientStop Color="#3B82F6" Offset="0.5"/>
-                <GradientStop Color="#06B6D4" Offset="1.0"/>
-            </LinearGradientBrush>
-        </Border.BorderBrush>
+    <Border CornerRadius="14" BorderThickness="1.2" BorderBrush="#252833">
         <Border.Background>
-            <LinearGradientBrush StartPoint="0,0" EndPoint="0.2,1">
-                <GradientStop Color="#0D0E1A" Offset="0.0"/>
-                <GradientStop Color="#07080F" Offset="1.0"/>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#15161A" Offset="0.0"/>
+                <GradientStop Color="#0F1014" Offset="1.0"/>
             </LinearGradientBrush>
         </Border.Background>
 
         <Grid Margin="18">
             <Grid.RowDefinitions>
-                <RowDefinition Height="45"/>
-                <RowDefinition Height="120"/>
-                <RowDefinition Height="75"/>
+                <RowDefinition Height="32"/>
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="65"/>
+                <RowDefinition Height="24"/>
             </Grid.RowDefinitions>
 
-            <!-- TITLE BAR -->
+            <!-- TOP BAR: DRAGGABLE REGION & CONTROLS -->
             <Grid Grid.Row="0" Name="TitleBarGrid" Background="Transparent">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -1226,194 +1220,166 @@ function Show-GrickoGui {
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="*" Foreground="#A855F7" FontSize="18" FontWeight="Bold" Margin="0,0,10,0"/>
-                    <TextBlock Text="GRICKO SS TOOL" Foreground="#F8FAFC" FontSize="17" FontWeight="Bold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
-                    <Border Background="#1E1B4B" CornerRadius="4" Padding="6,2" Margin="12,0,0,0" VerticalAlignment="Center" BorderBrush="#4338CA" BorderThickness="1">
-                        <TextBlock Text="OCEAN SUITE v2.2" Foreground="#38BDF8" FontSize="11" FontWeight="SemiBold"/>
-                    </Border>
+                    <TextBlock Text="gricko" Foreground="#64748B" FontSize="11" FontWeight="SemiBold" Margin="4,0,0,0"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Name="BtnMin" Content="_" Width="36" Height="28" Background="#131526" Foreground="#94A3B8" BorderThickness="0" Cursor="Hand" Margin="0,0,6,0">
+                    <Button Name="BtnMin" Content="—" Width="30" Height="24" Background="#1A1C24" Foreground="#94A3B8" BorderThickness="0" Cursor="Hand" Margin="0,0,5,0">
                         <Button.Resources>
                             <Style TargetType="Border">
-                                <Setter Property="CornerRadius" Value="5"/>
+                                <Setter Property="CornerRadius" Value="4"/>
                             </Style>
                         </Button.Resources>
                     </Button>
-                    <Button Name="BtnClose" Content="X" Width="36" Height="28" Background="#1E1428" Foreground="#F43F5E" BorderThickness="0" Cursor="Hand">
+                    <Button Name="BtnClose" Content="✕" Width="30" Height="24" Background="#1A1C24" Foreground="#94A3B8" BorderThickness="0" Cursor="Hand">
                         <Button.Resources>
                             <Style TargetType="Border">
-                                <Setter Property="CornerRadius" Value="5"/>
+                                <Setter Property="CornerRadius" Value="4"/>
                             </Style>
                         </Button.Resources>
                     </Button>
                 </StackPanel>
             </Grid>
 
-            <!-- TARGET & SYSTEM CARDS -->
-            <Grid Grid.Row="1" Margin="0,8,0,8">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="14"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
+            <!-- MAIN DYNAMIC CONTENT AREA -->
+            <Grid Grid.Row="1" VerticalAlignment="Center">
+                
+                <!-- VIEW 1: HOME & SCAN BUTTON -->
+                <StackPanel Name="HomeView" Visibility="Visible" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,10,0,0">
+                    <!-- Shark Logo -->
+                    <TextBlock Text="}&lt;(((*&gt;" Foreground="#CBD5E1" FontSize="36" FontWeight="Bold" FontFamily="Consolas, Courier New" HorizontalAlignment="Center" Margin="0,0,0,14"/>
+                    
+                    <!-- Title & Subtitle -->
+                    <TextBlock Text="Gricko SS Tool" Foreground="#F8FAFC" FontSize="20" FontWeight="Bold" FontFamily="Segoe UI" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                    <TextBlock Text="Advanced Automated screenshare" Foreground="#94A3B8" FontSize="12.5" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,26"/>
 
-                <!-- Target Instance Card -->
-                <Border Grid.Column="0" Background="#101222" CornerRadius="8" BorderBrush="#252847" BorderThickness="1" Padding="14,10">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-                        <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                            <TextBlock Text="TARGET MINECRAFT INSTANCE" Foreground="#A78BFA" FontSize="11" FontWeight="Bold"/>
-                            <Border Name="TargetStatusBadge" Background="#064E3B" CornerRadius="4" Padding="6,1" HorizontalAlignment="Right">
-                                <TextBlock Name="TargetStatusText" Text="ANALYZING..." Foreground="#34D399" FontSize="10" FontWeight="Bold"/>
-                            </Border>
-                        </DockPanel>
-                        <StackPanel Grid.Row="1" VerticalAlignment="Center">
-                            <TextBlock Name="TxtLauncher" Text="Launcher : Detecting..." Foreground="#E2E8F0" FontSize="12" Margin="0,1"/>
-                            <TextBlock Name="TxtProfile" Text="Profile  : Detecting..." Foreground="#94A3B8" FontSize="11" Margin="0,1"/>
-                            <TextBlock Name="TxtLastPlayed" Text="Last Run : Detecting..." Foreground="#94A3B8" FontSize="11" Margin="0,1"/>
-                            <TextBlock Name="TxtServer" Text="Server   : None detected" Foreground="#38BDF8" FontSize="11" Margin="0,1"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
-
-                <!-- System & Elevation Card -->
-                <Border Grid.Column="2" Background="#101222" CornerRadius="8" BorderBrush="#252847" BorderThickness="1" Padding="14,10">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
-                        </Grid.RowDefinitions>
-                        <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                            <TextBlock Text="SYSTEM &amp; INTEGRITY STATUS" Foreground="#60A5FA" FontSize="11" FontWeight="Bold"/>
-                            <Border Name="AdminBadge" Background="#1E1B4B" CornerRadius="4" Padding="6,1" HorizontalAlignment="Right">
-                                <TextBlock Name="TxtAdmin" Text="CHECKING..." Foreground="#38BDF8" FontSize="10" FontWeight="Bold"/>
-                            </Border>
-                        </DockPanel>
-                        <StackPanel Grid.Row="1" VerticalAlignment="Center">
-                            <TextBlock Name="TxtHost" Text="Hostname : Detecting..." Foreground="#E2E8F0" FontSize="12" Margin="0,1"/>
-                            <TextBlock Name="TxtUser" Text="User     : Detecting..." Foreground="#94A3B8" FontSize="11" Margin="0,1"/>
-                            <TextBlock Name="TxtEngine" Text="Engine   : Gricko Forensic Core v2.2.0" Foreground="#A78BFA" FontSize="11" Margin="0,1"/>
-                            <TextBlock Name="TxtScanState" Text="Status   : Ready for inspection" Foreground="#34D399" FontSize="11" Margin="0,1"/>
-                        </StackPanel>
-                    </Grid>
-                </Border>
-            </Grid>
-
-            <!-- SCAN CONTROL ACTION AREA -->
-            <Border Grid.Row="2" Background="#101222" CornerRadius="8" BorderBrush="#252847" BorderThickness="1" Padding="14,10" Margin="0,0,0,8">
-                <Grid VerticalAlignment="Center">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="220"/>
-                        <ColumnDefinition Width="16"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-
-                    <Button Name="BtnScan" Content="START SCAN" Height="44" FontSize="14" FontWeight="Bold" Foreground="#FFFFFF" Cursor="Hand">
-                        <Button.Background>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                <GradientStop Color="#7C3AED" Offset="0.0"/>
-                                <GradientStop Color="#2563EB" Offset="1.0"/>
-                            </LinearGradientBrush>
-                        </Button.Background>
+                    <!-- Centered Scan Button -->
+                    <Button Name="BtnScan" Content="SCAN" Width="140" Height="38" FontSize="13" FontWeight="Bold" Foreground="#FFFFFF" Background="#262A38" BorderBrush="#3B4259" BorderThickness="1" Cursor="Hand" HorizontalAlignment="Center">
                         <Button.Resources>
                             <Style TargetType="Border">
-                                <Setter Property="CornerRadius" Value="6"/>
+                                <Setter Property="CornerRadius" Value="19"/>
                             </Style>
                         </Button.Resources>
                     </Button>
+                </StackPanel>
 
-                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                        <DockPanel Margin="0,0,0,6">
-                            <TextBlock Name="TxtProgressStatus" Text="Ready to scan. Click 'START SCAN' to begin forensic analysis." Foreground="#94A3B8" FontSize="11"/>
-                            <TextBlock Name="TxtPercent" Text="0%" Foreground="#38BDF8" FontSize="11" FontWeight="Bold" HorizontalAlignment="Right"/>
-                        </DockPanel>
-                        <ProgressBar Name="ScanProgress" Height="8" Minimum="0" Maximum="100" Value="0" Background="#0A0B14" BorderThickness="0">
+                <!-- VIEW 2: SCANNING PROGRESS BAR -->
+                <StackPanel Name="ProgressView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420" Margin="0,15,0,0">
+                    <!-- Shark Logo -->
+                    <TextBlock Text="}&lt;(((*&gt;" Foreground="#E2E8F0" FontSize="36" FontWeight="Bold" FontFamily="Consolas, Courier New" HorizontalAlignment="Center" Margin="0,0,0,14"/>
+                    
+                    <TextBlock Text="Gricko SS Tool" Foreground="#F8FAFC" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                    <TextBlock Text="Advanced Automated screenshare" Foreground="#94A3B8" FontSize="12.5" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,28"/>
+
+                    <!-- Rounded Progress Bar -->
+                    <Border CornerRadius="8" Height="14" Background="#1B1D26" Margin="0,0,0,12" ClipToBounds="True">
+                        <ProgressBar Name="ScanProgress" Height="14" Minimum="0" Maximum="100" Value="0" Background="Transparent" BorderThickness="0">
                             <ProgressBar.Foreground>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                    <GradientStop Color="#8B5CF6" Offset="0.0"/>
-                                    <GradientStop Color="#38BDF8" Offset="1.0"/>
+                                    <GradientStop Color="#E2E8F0" Offset="0.0"/>
+                                    <GradientStop Color="#FFFFFF" Offset="1.0"/>
                                 </LinearGradientBrush>
                             </ProgressBar.Foreground>
                         </ProgressBar>
-                    </StackPanel>
-                </Grid>
-            </Border>
+                    </Border>
 
-            <!-- LIVE ACTIVITY LOG CONSOLE -->
-            <Border Grid.Row="3" Background="#06070E" CornerRadius="8" BorderBrush="#1C1F38" BorderThickness="1" Padding="10">
-                <Grid>
+                    <!-- Status Text e.g. "Scanning memory... • 50%" -->
+                    <TextBlock Name="TxtProgressStatus" Text="Scanning memory... • 0%" Foreground="#94A3B8" FontSize="12" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- VIEW 3: RESULTS SUMMARY -->
+                <StackPanel Name="ResultsView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Width="460">
+                    <!-- Shark Logo -->
+                    <TextBlock Text="}&lt;(((*&gt;" Foreground="#CBD5E1" FontSize="30" FontWeight="Bold" FontFamily="Consolas, Courier New" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                    
+                    <TextBlock Name="TxtResultTitle" Text="Scan Complete" Foreground="#F8FAFC" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                    <TextBlock Name="TxtResultSubtitle" Text="All forensic tests concluded." Foreground="#34D399" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,14"/>
+
+                    <!-- Last Played Instance Box -->
+                    <Border Background="#161822" CornerRadius="8" BorderBrush="#25293A" BorderThickness="1" Padding="14,10" Margin="0,0,0,14">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,4">
+                                <TextBlock Text="LAST PLAYED INSTANCE" Foreground="#94A3B8" FontSize="10.5" FontWeight="Bold"/>
+                                <TextBlock Name="TxtResultTime" Text="N/A" Foreground="#38BDF8" FontSize="10.5" FontWeight="Bold" HorizontalAlignment="Right"/>
+                            </DockPanel>
+                            <TextBlock Name="TxtResultLauncher" Text="Launcher : None detected" Foreground="#E2E8F0" FontSize="11.5" Margin="0,1"/>
+                            <TextBlock Name="TxtResultProfile" Text="Profile  : Standard" Foreground="#94A3B8" FontSize="11" Margin="0,1"/>
+                            <TextBlock Name="TxtResultServer" Text="Server   : None" Foreground="#38BDF8" FontSize="11" Margin="0,1"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Detections Pill -->
+                    <TextBlock Name="TxtDetectionsBadge" Text="No Cheats Detected" Foreground="#34D399" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,14"/>
+
+                    <!-- Action Buttons -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <Button Name="BtnDetails" Content="DETAILS" Width="120" Height="34" FontSize="12" FontWeight="Bold" Foreground="#FFFFFF" Background="#262A38" BorderBrush="#3B4259" BorderThickness="1" Cursor="Hand" Margin="0,0,10,0">
+                            <Button.Resources>
+                                <Style TargetType="Border">
+                                    <Setter Property="CornerRadius" Value="17"/>
+                                </Style>
+                            </Button.Resources>
+                        </Button>
+                        <Button Name="BtnRescan" Content="RE-SCAN" Width="100" Height="34" FontSize="12" FontWeight="Bold" Foreground="#94A3B8" Background="#161822" BorderThickness="0" Cursor="Hand">
+                            <Button.Resources>
+                                <Style TargetType="Border">
+                                    <Setter Property="CornerRadius" Value="17"/>
+                                </Style>
+                            </Button.Resources>
+                        </Button>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- VIEW 4: EXPANDED DETAILS INSPECTOR -->
+                <Grid Name="DetailsView" Visibility="Collapsed" Height="330" Margin="4,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <DockPanel Grid.Row="0" Margin="4,0,4,6">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="[Live]" Foreground="#38BDF8" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                            <TextBlock Text="FORENSIC ACTIVITY FEED" Foreground="#94A3B8" FontSize="11" FontWeight="Bold"/>
-                        </StackPanel>
-                        <TextBlock Name="BtnClearLogs" Text="Clear View" Foreground="#64748B" FontSize="11" Cursor="Hand" HorizontalAlignment="Right"/>
+
+                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                        <TextBlock Text="DEEP SCAN FORENSIC DETAILS" Foreground="#F8FAFC" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
+                        <Button Name="BtnBackFromDetails" Content="← Back" Background="Transparent" Foreground="#38BDF8" BorderThickness="0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" HorizontalAlignment="Right"/>
                     </DockPanel>
-                    <ListBox Grid.Row="1" Name="LogListBox" Background="Transparent" BorderThickness="0" FontFamily="Consolas, Segoe UI" FontSize="12" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
-                                <Setter Property="Padding" Value="4,2"/>
-                                <Setter Property="Focusable" Value="False"/>
-                                <Setter Property="Template">
-                                    <Setter.Value>
-                                        <ControlTemplate TargetType="ListBoxItem">
-                                            <ContentPresenter />
-                                        </ControlTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </ListBox.ItemContainerStyle>
-                    </ListBox>
+
+                    <!-- Scrollable inspection log -->
+                    <Border Grid.Row="1" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="8">
+                        <ListBox Name="DetailsListBox" Background="Transparent" BorderThickness="0" FontFamily="Consolas, Segoe UI" FontSize="11.5" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="2,2"/>
+                                    <Setter Property="Focusable" Value="False"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <ContentPresenter />
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                        </ListBox>
+                    </Border>
+
+                    <!-- Export button in details -->
+                    <DockPanel Grid.Row="2" Margin="0,8,0,0">
+                        <TextBlock Name="TxtSummaryStats" Text="0 Flags | 0 Clean Checks" Foreground="#64748B" FontSize="11" VerticalAlignment="Center"/>
+                        <Button Name="BtnExportJson" Content="Export Full JSON" Height="26" Padding="12,0" Background="#1A1D27" Foreground="#C084FC" BorderThickness="0" FontSize="11" FontWeight="SemiBold" Cursor="Hand" HorizontalAlignment="Right">
+                            <Button.Resources>
+                                <Style TargetType="Border">
+                                    <Setter Property="CornerRadius" Value="4"/>
+                                </Style>
+                            </Button.Resources>
+                        </Button>
+                    </DockPanel>
                 </Grid>
-            </Border>
 
-            <!-- SCORECARD & ACTION FOOTER -->
-            <Grid Grid.Row="4" Margin="0,10,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+            </Grid>
 
-                <!-- Scorecard Badges -->
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Border Name="BadgeFlags" Background="#2A1215" BorderBrush="#991B1B" BorderThickness="1" CornerRadius="6" Padding="12,6" Margin="0,0,8,0">
-                        <TextBlock Name="TxtFlagCount" Text="0 FLAGS" Foreground="#F87171" FontSize="12" FontWeight="Bold"/>
-                    </Border>
-                    <Border Name="BadgeWarns" Background="#2D2109" BorderBrush="#854D0E" BorderThickness="1" CornerRadius="6" Padding="12,6" Margin="0,0,8,0">
-                        <TextBlock Name="TxtWarnCount" Text="0 WARNINGS" Foreground="#FBBF24" FontSize="12" FontWeight="Bold"/>
-                    </Border>
-                    <Border Name="BadgeCleans" Background="#0A2218" BorderBrush="#065F46" BorderThickness="1" CornerRadius="6" Padding="12,6">
-                        <TextBlock Name="TxtCleanCount" Text="0 VERIFIED CLEAN" Foreground="#34D399" FontSize="12" FontWeight="Bold"/>
-                    </Border>
-                </StackPanel>
-
-                <!-- Action Buttons -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Name="BtnExportJson" Content="Export JSON Report" Height="36" Padding="14,0" Background="#1E1B4B" Foreground="#C084FC" BorderBrush="#4C1D95" BorderThickness="1" FontWeight="SemiBold" Cursor="Hand" Margin="0,0,8,0">
-                        <Button.Resources>
-                            <Style TargetType="Border">
-                                <Setter Property="CornerRadius" Value="6"/>
-                            </Style>
-                        </Button.Resources>
-                    </Button>
-                    <Button Name="BtnExit" Content="Exit" Height="36" Padding="16,0" Background="#131526" Foreground="#94A3B8" BorderThickness="0" FontWeight="SemiBold" Cursor="Hand">
-                        <Button.Resources>
-                            <Style TargetType="Border">
-                                <Setter Property="CornerRadius" Value="6"/>
-                            </Style>
-                        </Button.Resources>
-                    </Button>
-                </StackPanel>
+            <!-- FOOTER WATERMARK (Matching screenshot) -->
+            <Grid Grid.Row="2">
+                <TextBlock Text="powered by Gricko SS Tool" Foreground="#475569" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,4,2"/>
             </Grid>
         </Grid>
     </Border>
@@ -1423,33 +1389,32 @@ function Show-GrickoGui {
     $reader = [System.Xml.XmlNodeReader]::new($xaml)
     $window = [System.Windows.Markup.XamlReader]::Load($reader)
 
-    # Resolve UI Elements
-    $titleBarGrid      = $window.FindName("TitleBarGrid")
-    $btnMin            = $window.FindName("BtnMin")
-    $btnClose          = $window.FindName("BtnClose")
-    $btnScan           = $window.FindName("BtnScan")
-    $btnExportJson     = $window.FindName("BtnExportJson")
-    $btnExit           = $window.FindName("BtnExit")
-    $btnClearLogs      = $window.FindName("BtnClearLogs")
-    $scanProgress      = $window.FindName("ScanProgress")
-    $txtProgressStatus = $window.FindName("TxtProgressStatus")
-    $txtPercent        = $window.FindName("TxtPercent")
-    $logListBox        = $window.FindName("LogListBox")
-    $txtLauncher       = $window.FindName("TxtLauncher")
-    $txtProfile        = $window.FindName("TxtProfile")
-    $txtLastPlayed     = $window.FindName("TxtLastPlayed")
-    $txtServer         = $window.FindName("TxtServer")
-    $targetStatusText  = $window.FindName("TargetStatusText")
-    $txtHost           = $window.FindName("TxtHost")
-    $txtUser           = $window.FindName("TxtUser")
-    $txtAdmin          = $window.FindName("TxtAdmin")
-    $adminBadge        = $window.FindName("AdminBadge")
-    $txtFlagCount      = $window.FindName("TxtFlagCount")
-    $txtWarnCount      = $window.FindName("TxtWarnCount")
-    $txtCleanCount     = $window.FindName("TxtCleanCount")
-    $txtScanState      = $window.FindName("TxtScanState")
+    # UI Element Handles
+    $titleBarGrid       = $window.FindName("TitleBarGrid")
+    $btnMin             = $window.FindName("BtnMin")
+    $btnClose           = $window.FindName("BtnClose")
+    $homeView           = $window.FindName("HomeView")
+    $progressView       = $window.FindName("ProgressView")
+    $resultsView        = $window.FindName("ResultsView")
+    $detailsView        = $window.FindName("DetailsView")
+    $btnScan            = $window.FindName("BtnScan")
+    $btnDetails         = $window.FindName("BtnDetails")
+    $btnRescan          = $window.FindName("BtnRescan")
+    $btnBackFromDetails = $window.FindName("BtnBackFromDetails")
+    $btnExportJson      = $window.FindName("BtnExportJson")
+    $scanProgress       = $window.FindName("ScanProgress")
+    $txtProgressStatus  = $window.FindName("TxtProgressStatus")
+    $txtResultTitle     = $window.FindName("TxtResultTitle")
+    $txtResultSubtitle  = $window.FindName("TxtResultSubtitle")
+    $txtResultTime      = $window.FindName("TxtResultTime")
+    $txtResultLauncher  = $window.FindName("TxtResultLauncher")
+    $txtResultProfile   = $window.FindName("TxtResultProfile")
+    $txtResultServer    = $window.FindName("TxtResultServer")
+    $txtDetectionsBadge = $window.FindName("TxtDetectionsBadge")
+    $detailsListBox     = $window.FindName("DetailsListBox")
+    $txtSummaryStats    = $window.FindName("TxtSummaryStats")
 
-    # Title Bar Drag & Window Controls
+    # Drag Move
     $titleBarGrid.Add_MouseLeftButtonDown({
         param($s, $e)
         if ($e.ButtonState -eq [System.Windows.Input.MouseButtonState]::Pressed) {
@@ -1459,29 +1424,28 @@ function Show-GrickoGui {
 
     $btnMin.Add_Click({ $window.WindowState = [System.Windows.WindowState]::Minimized })
     $btnClose.Add_Click({ $window.Close() })
-    $btnExit.Add_Click({ $window.Close() })
-    $btnClearLogs.Add_MouseLeftButtonDown({ $logListBox.Items.Clear() })
 
-    # Populate System Card
-    $txtHost.Text = "Hostname : $env:COMPUTERNAME"
-    $txtUser.Text = "User     : $env:USERNAME"
-    $isAdmin = Test-IsAdmin
-    if ($isAdmin) {
-        $txtAdmin.Text = "ADMINISTRATOR"
-        $txtAdmin.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#34D399")
-        $adminBadge.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#064E3B")
-    } else {
-        $txtAdmin.Text = "STANDARD USER"
-        $txtAdmin.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FBBF24")
-        $adminBadge.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#451A03")
-    }
+    # Navigation Handlers
+    $btnDetails.Add_Click({
+        $resultsView.Visibility = [System.Windows.Visibility]::Collapsed
+        $detailsView.Visibility = [System.Windows.Visibility]::Visible
+    })
 
-    # Helper to pump WPF UI messages
+    $btnBackFromDetails.Add_Click({
+        $detailsView.Visibility = [System.Windows.Visibility]::Collapsed
+        $resultsView.Visibility = [System.Windows.Visibility]::Visible
+    })
+
+    $btnRescan.Add_Click({
+        $resultsView.Visibility = [System.Windows.Visibility]::Collapsed
+        $homeView.Visibility = [System.Windows.Visibility]::Visible
+    })
+
     function Pump-WpfEvents {
         [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, [System.Windows.Threading.DispatcherPriority]::Render)
     }
 
-    # Real-Time GUI Logger Callback
+    # GUI Logger Hook
     $Global:GuiLoggerCallback = {
         param($entry)
         $window.Dispatcher.Invoke([Action]{
@@ -1489,14 +1453,11 @@ function Show-GrickoGui {
             $sp.Orientation = [System.Windows.Controls.Orientation]::Horizontal
             $sp.Margin = [System.Windows.Thickness]::new(0, 1, 0, 1)
 
-            # Timestamp
             $tbTime = [System.Windows.Controls.TextBlock]::new()
             $tbTime.Text = "$($entry.Timestamp) "
             $tbTime.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#64748B")
-            $tbTime.Margin = [System.Windows.Thickness]::new(0, 0, 6, 0)
             $sp.Children.Add($tbTime) | Out-Null
 
-            # Level Badge
             $tbBadge = [System.Windows.Controls.TextBlock]::new()
             $tbBadge.Text = "[$($entry.Level)] "
             $badgeColor = switch ($entry.Level) {
@@ -1507,140 +1468,144 @@ function Show-GrickoGui {
             }
             $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($badgeColor)
             $tbBadge.FontWeight = [System.Windows.FontWeights]::Bold
-            $tbBadge.Margin = [System.Windows.Thickness]::new(0, 0, 6, 0)
             $sp.Children.Add($tbBadge) | Out-Null
 
-            # Message
             $tbMsg = [System.Windows.Controls.TextBlock]::new()
             $tbMsg.Text = $entry.Message
             $tbMsg.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F1F5F9")
             $sp.Children.Add($tbMsg) | Out-Null
 
-            # Detail
             if ($entry.Detail) {
                 $tbDet = [System.Windows.Controls.TextBlock]::new()
                 $tbDet.Text = " -> $($entry.Detail)"
-                $tbDet.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7DD3FC")
+                $tbDet.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#94A3B8")
                 $sp.Children.Add($tbDet) | Out-Null
             }
 
-            $logListBox.Items.Add($sp) | Out-Null
-            $logListBox.ScrollIntoView($sp)
-
-            # Update Scorecard counters
-            $txtFlagCount.Text = "$($Global:ReportData.Scorecard.Flags) FLAGS"
-            $txtWarnCount.Text = "$($Global:ReportData.Scorecard.Warnings) WARNINGS"
-            $txtCleanCount.Text = "$($Global:ReportData.Scorecard.Clean) VERIFIED CLEAN"
+            $detailsListBox.Items.Add($sp) | Out-Null
         })
     }
 
-    # Status & Progress Callback
     $Global:GuiStatusCallback = {
         param([string]$status, [double]$pct)
         $window.Dispatcher.Invoke([Action]{
-            if ($status) { $txtProgressStatus.Text = $status }
             if ($pct -ge 0) {
                 $scanProgress.Value = $pct
-                $txtPercent.Text = "$([int]$pct)%"
+                $txtProgressStatus.Text = "$status • $([int]$pct)%"
+            } else {
+                $txtProgressStatus.Text = $status
             }
         })
         Pump-WpfEvents
     }
 
-    # Quick pre-inspection for Target Instance card on load
-    try {
-        $recent = Get-MinecraftInstances | Select-Object -First 1
-        if ($recent) {
-            $txtLauncher.Text = "Launcher : $($recent.LauncherName)"
-            $txtProfile.Text = "Profile  : $($recent.ProfileName)"
-            $txtLastPlayed.Text = "Last Run : $($recent.LastPlayedTime.ToString('yyyy-MM-dd HH:mm:ss'))"
-            $targetStatusText.Text = "TARGET FOUND"
-        }
-    } catch {}
-
-    # Scan Button Action
+    # Main Scan Logic
     $btnScan.Add_Click({
-        $btnScan.IsEnabled = $false
-        $btnScan.Content = "SCANNING..."
-        $txtScanState.Text = "Status   : Inspection in progress"
-        $txtScanState.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#38BDF8")
+        $homeView.Visibility = [System.Windows.Visibility]::Collapsed
+        $progressView.Visibility = [System.Windows.Visibility]::Visible
+        $detailsListBox.Items.Clear()
 
-        # Reset counters
+        # Reset counters & detections
         $Global:ReportData.Scorecard.Flags = 0
         $Global:ReportData.Scorecard.Warnings = 0
         $Global:ReportData.Scorecard.Clean = 0
         $Global:ReportData.Scorecard.Info = 0
-        $logListBox.Items.Clear()
+        $Global:ReportData.CheatClients = @()
+        $Global:ReportData.LegitClients = @()
 
-        # Step 1: Target Instance (10%)
-        Update-ScanStatus "Detecting last played Minecraft instance & analyzing logs..." 10
+        # Phase 1: Last Instance (15%)
+        Update-ScanStatus "Detecting last played instance..." 15
         Scan-LastPlayedInstance
-        if ($Global:ReportData.LastPlayedInstance.LauncherName) {
-            $inst = $Global:ReportData.LastPlayedInstance
-            $txtLauncher.Text = "Launcher : $($inst.LauncherName)"
-            $txtProfile.Text = "Profile  : $($inst.ProfileName)"
-            $txtLastPlayed.Text = "Last Run : $($inst.LastPlayedTime)"
-            if ($inst.ConnectedServers -and $inst.ConnectedServers.Count -gt 0) {
-                $txtServer.Text = "Server   : $($inst.ConnectedServers -join ', ')"
-            }
-        }
         Pump-WpfEvents
 
-        # Step 2: Running Java Processes & Injections (25%)
-        Update-ScanStatus "Inspecting Java processes, main classes and agents..." 25
+        # Phase 2: Memory & Running Processes (35%)
+        Update-ScanStatus "Scanning memory..." 35
         Scan-JavaProcesses
         Pump-WpfEvents
 
-        # Step 3: Prefetch Traces (40%)
-        Update-ScanStatus "Scanning Prefetch execution traces (Past $HoursPrefetch hrs)..." 40
+        # Phase 3: Prefetch Traces (55%)
+        Update-ScanStatus "Analyzing Prefetch history..." 55
         Scan-PrefetchTraces -Hours $HoursPrefetch
         Pump-WpfEvents
 
-        # Step 4: BAM/DAM Registry (55%)
-        Update-ScanStatus "Querying BAM/DAM kernel execution registry (Past $HoursBAM hrs)..." 55
+        # Phase 4: BAM / DAM Registry (70%)
+        Update-ScanStatus "Checking BAM execution records..." 70
         Scan-BAMRegistry -Hours $HoursBAM
         Pump-WpfEvents
 
-        # Step 5: UserAssist ROT13 (70%)
-        Update-ScanStatus "Decoding UserAssist ROT13 application execution history..." 70
+        # Phase 5: UserAssist & File Systems (85%)
+        Update-ScanStatus "Auditing UserAssist and file system..." 85
         Scan-UserAssist
-        Pump-WpfEvents
-
-        # Step 6: File System, Temp drops & Anti-Forensics (85%)
-        Update-ScanStatus "Checking Mods, Temp drops, Event Logs & USN Journal..." 85
         Scan-FileSystem -Hours $HoursFiles
         Pump-WpfEvents
 
-        # Step 7: USB Storage Traces (95%)
-        Update-ScanStatus "Enumerating USBSTOR device registry & removable drives..." 95
+        # Phase 6: Hardware & USB (95%)
+        Update-ScanStatus "Checking hardware & USB devices..." 95
         Scan-USBStorage
         Pump-WpfEvents
 
-        # Step 8: Final Report (100%)
-        Update-ScanStatus "Forensic scan complete. Review summary scorecard below." 100
-        $txtScanState.Text = "Status   : Scan Complete"
-        $txtScanState.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#34D399")
+        # Finalizing (100%)
+        Update-ScanStatus "Finalizing scan results..." 100
+        Start-Sleep -Milliseconds 400
 
-        $btnScan.IsEnabled = $true
-        $btnScan.Content = "RE-SCAN"
+        # Populate Results View
+        $inst = $Global:ReportData.LastPlayedInstance
+        if ($inst -and $inst.LastPlayedTime) {
+            $txtResultTime.Text = "$($inst.LastPlayedTime)"
+            $txtResultLauncher.Text = "Launcher : $($inst.LauncherName)"
+            $txtResultProfile.Text = "Profile  : $($inst.ProfileName) ($($inst.Version))"
+            if ($inst.ConnectedServers -and $inst.ConnectedServers.Count -gt 0) {
+                $txtResultServer.Text = "Server   : $($inst.ConnectedServers -join ', ')"
+            } else {
+                $txtResultServer.Text = "Server   : Singleplayer / Unrecorded"
+            }
+        } else {
+            $txtResultTime.Text = "No Instance Found"
+            $txtResultLauncher.Text = "Launcher : N/A"
+            $txtResultProfile.Text = "Profile  : N/A"
+            $txtResultServer.Text = "Server   : N/A"
+        }
+
+        # Populate Detections
+        $flags = $Global:ReportData.Scorecard.Flags
+        if ($flags -gt 0) {
+            $txtResultTitle.Text = "Cheats Detected"
+            $txtResultTitle.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
+            $txtResultSubtitle.Text = "$flags suspicious or cheat artifacts identified"
+            $txtResultSubtitle.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#EF4444")
+            $txtDetectionsBadge.Text = "$flags CHEAT ARTIFACTS FLAGGED"
+            $txtDetectionsBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
+        } else {
+            $txtResultTitle.Text = "Scan Complete"
+            $txtResultTitle.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F8FAFC")
+            $txtResultSubtitle.Text = "No cheat clients or injection tools detected"
+            $txtResultSubtitle.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#34D399")
+            $txtDetectionsBadge.Text = "VERIFIED CLEAN"
+            $txtDetectionsBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#34D399")
+        }
+
+        $txtSummaryStats.Text = "$flags Flags | $($Global:ReportData.Scorecard.Warnings) Warnings | $($Global:ReportData.Scorecard.Clean) Clean Checks"
+
+        # Transition to Results View
+        $progressView.Visibility = [System.Windows.Visibility]::Collapsed
+        $resultsView.Visibility = [System.Windows.Visibility]::Visible
         Pump-WpfEvents
     })
 
-    # Export JSON Button Action
+    # Export JSON Handler
     $btnExportJson.Add_Click({
         $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-        $filename = "Gricko_Report_${timestamp}.json"
+        $filename = "Gricko_SS_Report_${timestamp}.json"
         $savePath = [System.IO.Path]::Combine([Environment]::GetFolderPath("Desktop"), $filename)
         try {
             $Global:ReportData | ConvertTo-Json -Depth 6 | Set-Content -Path $savePath -Encoding UTF8
-            [System.Windows.MessageBox]::Show("Forensic report exported successfully to:`n$savePath", "Gricko SS Tool", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information)
+            [System.Windows.MessageBox]::Show("Forensic report exported to Desktop:`n$savePath", "Gricko SS Tool", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information)
         } catch {
             $msg = $_.Exception.Message
             [System.Windows.MessageBox]::Show("Failed to export report: $msg", "Export Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
         }
     })
 
-    # Show Window
     $window.ShowDialog() | Out-Null
 }
 
