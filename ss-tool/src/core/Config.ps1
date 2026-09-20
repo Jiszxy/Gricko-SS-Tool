@@ -33,13 +33,14 @@ $Global:ReportData = [ordered]@{
     BAMTraces          = @()
     UserAssistTraces   = @()
     MuiCacheTraces     = @()
+    ActiveInstanceMods = @()
     ModFiles           = @()
     TempFiles          = @()
     AntiForensics      = @()
     USBDevices         = @()
 }
 
-# Comprehensive Minecraft Cheat & Ghost Client Signatures
+# Comprehensive Minecraft Cheat, Ghost Client & Disallowed Mod Signatures
 $Global:CheatSignatures = @(
     # Ghost & Internal Injection Clients
     "prestige", "grimclient", "grim-client", "vape", "vapelite", "vapev4",
@@ -54,7 +55,14 @@ $Global:CheatSignatures = @(
     "futureclient", "future-client", "rusherhack", "rusher", "boze", "abyss", 
     "coffeeclient", "catwithsword", "doomsday", "fdpclient", "lime", "envy", 
     "pluto", "exhibition", "astolfo", "zeroday", "impact", "bleachhack", "ares", 
-    "kamiblue", "lambda", "cleanerclient"
+    "kamiblue", "lambda", "cleanerclient", "thunderhack", "mathax",
+
+    # Disallowed Combat Optimizers & Unfair PvP Modifications
+    "crystal.*optimizer", "crystaloptimizer", "marlow.*crystal",
+    "anchor.*optimizer", "anchoroptimizer", "herosanchor",
+    "autoclicker", "auto-clicker", "triggerbot", "reach", "hitbox",
+    "aimassist", "fastplace", "autototem", "autoanchor", "autopot",
+    "freecam", "freelook", "xray", "x-ray", "baritone", "seedcracker"
 )
 
 # Known Legitimate Launchers & Mod Loaders

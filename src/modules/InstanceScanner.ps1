@@ -378,7 +378,114 @@ function Scan-LastPlayedInstance {
             LastPlayedTime   = $lastPlayed.LastPlayed.ToString("yyyy-MM-dd HH:mm:ss")
             ConnectedServers = $connectedServers
         }
+
+        # Deep scan all installed mods in this active instance
+        Scan-InstanceMods -InstancePath $lastPlayed.Path -ProfileName $lastPlayed.Profile
     } else {
         Write-Alert -Level "WARN" -Message "Could not detect any Minecraft launchers or instance profiles." -Detail "Minecraft may be installed on a non-standard drive or launched as portable."
     }
 }
+
+function Scan-InstanceMods {
+    param(
+        [string]$InstancePath,
+        [string]$ProfileName
+    )
+
+    if (-not $InstancePath -or -not (Test-Path $InstancePath)) { return }
+    $modsFolder = Join-Path $InstancePath "mods"
+    if (-not (Test-Path $modsFolder)) { return }
+
+    Write-Alert -Level "INFO" -Message "Deep scanning installed mods in active profile" -Detail "$modsFolder"
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
+
+    $modFiles = Get-ChildItem -Path $modsFolder -File -Filter "*.jar" -ErrorAction SilentlyContinue | Sort-Object Name
+    $activeMods = [System.Collections.Generic.List[PSCustomObject]]::new()
+    $flaggedCount = 0
+
+    foreach ($mod in $modFiles) {
+        $isFlagged = $false
+        $reason = "Clean"
+        $category = "CLEAN"
+        $displayName = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
+
+        # 1. Filename pattern matching
+        foreach ($sig in $Global:CheatSignatures) {
+            if ($mod.Name -match "(?i)$sig") {
+                $isFlagged = $true
+                $category = "FLAGGED CHEAT / DISALLOWED"
+                $reason = "Matches cheat / disallowed signature: $sig"
+                break
+            }
+        }
+
+        # 2. Deep inspection inside JAR
+        if (-not $isFlagged) {
+            try {
+                $zip = [System.IO.Compression.ZipFile]::OpenRead($mod.FullName)
+
+                # Check fabric.mod.json / quilt.mod.json / mcmod.info
+                $metaEntry = $zip.GetEntry("fabric.mod.json")
+                if (-not $metaEntry) { $metaEntry = $zip.GetEntry("quilt.mod.json") }
+                if (-not $metaEntry) { $metaEntry = $zip.GetEntry("mcmod.info") }
+
+                if ($metaEntry) {
+                    $stream = $metaEntry.Open()
+                    $reader = [System.IO.StreamReader]::new($stream)
+                    $metaContent = $reader.ReadToEnd()
+                    $reader.Close()
+                    $stream.Close()
+
+                    foreach ($sig in $Global:CheatSignatures) {
+                        if ($metaContent -match "(?i)`"id`"\s*:\s*`"[^`"]*$sig" -or $metaContent -match "(?i)`"name`"\s*:\s*`"[^`"]*$sig") {
+                            $isFlagged = $true
+                            $category = "FLAGGED CHEAT / DISALLOWED"
+                            $reason = "Internal metadata matches signature: $sig"
+                            break
+                        }
+                    }
+                }
+
+                # Check class package entries
+                if (-not $isFlagged) {
+                    foreach ($entry in $zip.Entries) {
+                        $eName = $entry.FullName.ToLower()
+                        if ($eName -match "wurstclient" -or $eName -match "meteordevelopment" -or $eName -match "vape" -or $eName -match "crystaloptimizer" -or $eName -match "anchoroptimizer" -or $eName -match "autoclicker") {
+                            $isFlagged = $true
+                            $category = "FLAGGED CHEAT / DISALLOWED"
+                            $reason = "Internal package contains cheat class: $($entry.FullName)"
+                            break
+                        }
+                    }
+                }
+
+                $zip.Dispose()
+            } catch {}
+        }
+
+        if ($isFlagged) {
+            $flaggedCount++
+            Write-Alert -Level "FLAG" -Message "SUSPICIOUS OR CHEAT MOD DETECTED IN ACTIVE INSTANCE!" -Detail "$($mod.Name) ($reason)"
+        }
+
+        $activeMods.Add([PSCustomObject]@{
+            Name          = $displayName
+            FileName      = $mod.Name
+            FullPath      = $mod.FullName
+            SizeKB        = [math]::Round($mod.Length / 1KB, 1)
+            LastWriteTime = $mod.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+            IsFlagged     = $isFlagged
+            Category      = $category
+            Reason        = $reason
+        })
+    }
+
+    $Global:ReportData.ActiveInstanceMods = $activeMods
+    if ($flaggedCount -gt 0) {
+        Write-Alert -Level "FLAG" -Message "$flaggedCount cheat/disallowed mod(s) found in active profile" -Detail "Profile: $ProfileName"
+    } else {
+        Write-Alert -Level "OK" -Message "All $($activeMods.Count) installed mods passed initial integrity scan" -Detail "Profile: $ProfileName"
+    }
+}
+
