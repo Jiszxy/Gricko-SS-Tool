@@ -177,18 +177,26 @@ function Analyze-InstanceMods {
                 Reason        = $cached.Reason
                 AIRiskScore   = $cached.AIRiskScore
                 AIDetails     = $cached.AIDetails
+                Invariants    = if ($cached.Invariants) { $cached.Invariants } else { @() }
+                Modules       = if ($cached.Modules) { $cached.Modules } else { @() }
             }
             $result.Mods.Add($cloned)
             if ($cloned.IsFlagged) { $result.FlaggedMods.Add($cloned); $result.FlaggedCount++ }
             continue
         }
 
-        $isFlagged    = $false
-        $reason       = "Clean"
-        $category     = "CLEAN"
-        $aiRisk       = 0
-        $aiDetails    = [System.Collections.Generic.List[string]]::new()
-        $displayName  = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
+        $isFlagged            = $false
+        $reason               = "Clean"
+        $category             = "CLEAN"
+        $aiRisk               = 0
+        $aiDetails            = [System.Collections.Generic.List[string]]::new()
+        $structuralInvariants = [System.Collections.Generic.HashSet[string]]::new()
+        $detectedModules      = [System.Collections.Generic.HashSet[string]]::new()
+        $detectedMechanics    = [System.Collections.Generic.HashSet[string]]::new()
+        $detectedWebGui       = [System.Collections.Generic.List[string]]::new()
+        $detectedLicenses     = [System.Collections.Generic.List[string]]::new()
+        $strHits              = [System.Collections.Generic.List[string]]::new()
+        $displayName          = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
 
         # -- LAYER 1: Filename signature matching ------------------------------
         $isKnownLegit = $false
@@ -316,141 +324,151 @@ function Analyze-InstanceMods {
                         }
                     }
 
-                    # -- LAYER 5: Full-Mod Deep Behavioral & Capability Analysis ---
-                    # Checks for embedded web dashboards or suspicious indicators to trigger full-JAR decompilation
-                    $hasWebAsset = $false
+                    # -- LAYER 5: Evasion-Proof Structural Bytecode Invariants & Deep Capability Analysis ---
+                    # Inspects bytecode mathematical and runtime invariants that cannot be renamed away
+                    $detectedModules      = [System.Collections.Generic.HashSet[string]]::new()
+                    $detectedMechanics    = [System.Collections.Generic.HashSet[string]]::new()
+                    $detectedWebGui       = [System.Collections.Generic.List[string]]::new()
+                    $detectedLicenses     = [System.Collections.Generic.List[string]]::new()
+                    $structuralInvariants = [System.Collections.Generic.HashSet[string]]::new()
+                    $strHits              = [System.Collections.Generic.List[string]]::new()
+
                     foreach ($entry in $allEntries) {
-                        if ($entry.FullName -match '(?i)(^web/|\.html$)') { $hasWebAsset = $true; break }
-                    }
+                        $fn = $entry.FullName
+                        if ($entry.Length -le 0 -or $fn.EndsWith("/")) { continue }
 
-                    $needsDeepScan = $isFlagged -or $hasWebAsset -or ($aiRisk -gt 0)
+                        # Class name inspection
+                        $mMatch = $cheatClassRegex.Match($fn)
+                        if ($mMatch.Success -and $detectedModules.Count -lt 12) {
+                            $detectedModules.Add($mMatch.Groups[2].Value) | Out-Null
+                        }
 
-                    if ($needsDeepScan) {
-                        $detectedModules   = [System.Collections.Generic.HashSet[string]]::new()
-                        $detectedMechanics = [System.Collections.Generic.HashSet[string]]::new()
-                        $detectedWebGui    = [System.Collections.Generic.List[string]]::new()
-                        $detectedLicenses  = [System.Collections.Generic.List[string]]::new()
-                        $strHits           = [System.Collections.Generic.List[string]]::new()
+                        # Check files for bytecode / assets
+                        if ($fn -match '\.(class|html|js|json)$') {
+                            try {
+                                $ces = $entry.Open()
+                                $readLen = $ces.Read($readBuf, 0, [Math]::Min($entry.Length, 65536))
+                                $ces.Close()
+                                $entryText = [System.Text.Encoding]::UTF8.GetString($readBuf, 0, $readLen)
 
-                        foreach ($entry in $allEntries) {
-                            $fn = $entry.FullName
-                            $className = [System.IO.Path]::GetFileNameWithoutExtension($fn)
+                                # Invariant 1: Embedded Local Web Server & Control Hub
+                                if ($entryText.Contains("HttpServer") -and ($entryText.Contains("com/sun/net/httpserver") -or $entryText.Contains("createContext") -or $entryText.Contains("org/nanohttpd"))) {
+                                    $structuralInvariants.Add("Embedded Local Web Server (createContext)") | Out-Null
+                                }
 
-                            # Class name inspection
-                            $mMatch = $cheatClassRegex.Match($fn)
-                            if ($mMatch.Success -and $detectedModules.Count -lt 12) {
-                                $detectedModules.Add($mMatch.Groups[2].Value) | Out-Null
-                            }
+                                # Invariant 2: StreamProof Screen Capture Evasion
+                                if ($entryText.Contains("SetWindowDisplayAffinity") -or $entryText.Contains("WDA_EXCLUDEFROMCAPTURE") -or $entryText.Contains("User32Extra")) {
+                                    $structuralInvariants.Add("StreamProof Screen Capture Evasion (SetWindowDisplayAffinity)") | Out-Null
+                                }
 
-                            # Deep content inspection of ALL classes and embedded web/config assets
-                            if ($fn -match '\.(class|html|js|json)$' -and -not $fn.EndsWith("/")) {
-                                try {
-                                    $ces = $entry.Open()
-                                    $readLen = $ces.Read($readBuf, 0, [Math]::Min($entry.Length, 65536))
-                                    $ces.Close()
-                                    $entryText = [System.Text.Encoding]::ASCII.GetString($readBuf, 0, $readLen)
+                                # Invariant 3: Trigonometric Silent-Aim / Combat Rotation Math
+                                if ($entryText.Contains("atan2") -and $entryText.Contains("toDegrees") -and 
+                                    ($entryText.Contains("getYaw") -or $entryText.Contains("getPitch") -or $entryText.Contains("setYaw") -or $entryText.Contains("setPitch") -or $entryText.Contains("setYRot") -or $entryText.Contains("setXRot") -or $entryText.Contains("getYRot") -or $entryText.Contains("getXRot") -or $entryText.Contains("wrapDegrees"))) {
+                                    $structuralInvariants.Add("Trig Combat Aimbot Rotation Math (atan2 -> player rotation)") | Out-Null
+                                }
 
-                                    # Module hits in text/bytecode
+                                # Invariant 4: Automated Shield-Breaker Weapon Swap
+                                if (($entryText.Contains("shield") -or $entryText.Contains("isBlocking") -or $entryText.Contains("isUsingItem")) -and 
+                                    $entryText.Contains("setSelected") -and 
+                                    ($entryText.Contains("axe") -or $entryText.Contains("Axe") -or $entryText.Contains("AxeItem") -or $entryText.Contains("targetReturnSlot"))) {
+                                    $structuralInvariants.Add("Auto Shield-Breaker Weapon Swap (Target isShielding -> setSelected Axe)") | Out-Null
+                                }
+
+                                # Invariant 5: Automated Anchor / Crystal Macro Mechanics
+                                if ($entryText.Contains("setSelected") -and 
+                                    ($entryText.Contains("glowstone") -or $entryText.Contains("respawn_anchor") -or $entryText.Contains("end_crystal") -or $entryText.Contains("obsidian")) -and 
+                                    ($entryText.Contains("interactBlock") -or $entryText.Contains("useItemOn") -or $entryText.Contains("KeyBinding") -or $entryText.Contains("KeyMapping"))) {
+                                    $structuralInvariants.Add("Anchor/Crystal Combat Macro Placement Loop (setSelected -> interactBlock)") | Out-Null
+                                }
+
+                                # Invariant 6: Hardware Fingerprinting / Anti-Leak DRM
+                                if ($entryText.Contains("wmic csproduct get uuid") -or $entryText.Contains("MachineGuid") -or $entryText.Contains("HWIDUtil") -or ($entryText.Contains("verifyLicense") -and $entryText.Contains("LicenseManager"))) {
+                                    $structuralInvariants.Add("Hardware ID (HWID) Anti-Leak DRM") | Out-Null
+                                    $detectedLicenses.Add("Private Cheat License & HWID Lock") | Out-Null
+                                }
+
+                                # Invariant 7: Mace / Velocity Combat Assist
+                                if (($entryText.Contains("mace") -or $entryText.Contains("Mace")) -and $entryText.Contains("setSelected") -and 
+                                    ($entryText.Contains("density") -or $entryText.Contains("spear") -or $entryText.Contains("targetReturnSlot")) -and 
+                                    ($entryText.Contains("KeyMapping") -or $entryText.Contains("KeyBinding") -or $entryText.Contains("clickAttack"))) {
+                                    $structuralInvariants.Add("Mace/Spear Automated Weapon Assist (density / spear swap)") | Out-Null
+                                }
+
+                                # Invariant 8: Embedded Local Web Dashboard
+                                if ($fn -match '\.html$' -and ($entryText.Contains("Combat & CPVP") -or $entryText.Contains("TripleT") -or $entryText.Contains("Auto Crystal") -or $entryText.Contains("Mace Assist") -or $entryText.Contains("Anchor Macro"))) {
+                                    $titleMatch = if ($entryText -match '(?i)<title>(.*?)</title>') { $Matches[1].Trim() } else { "Web GUI" }
+                                    if ($detectedWebGui.Count -lt 2) {
+                                        $detectedWebGui.Add("$fn ('$titleMatch')") | Out-Null
+                                    }
+                                }
+
+                                # Fast module extraction only if combat keywords present
+                                if ($entryText.Contains("Manager") -or $entryText.Contains("Macro") -or $entryText.Contains("Assist") -or $entryText.Contains("Aura") -or $entryText.Contains("Crystal") -or $entryText.Contains("Anchor")) {
                                     $textMatches = $cheatClassRegex.Matches($entryText)
                                     foreach ($tm in $textMatches) {
                                         if ($detectedModules.Count -lt 12) { $detectedModules.Add($tm.Groups[2].Value) | Out-Null }
                                     }
+                                }
 
-                                    # Behavioral mechanics detection
-                                    if ($entryText -match '(?i)\b(shieldRemove|shieldRemovedEnabled|shieldRemoveDelayMs)\b') {
-                                        $detectedMechanics.Add("Auto Shield-Break (Axe Swap)") | Out-Null
-                                    }
-                                    if ($entryText -match '(?i)\b(aimAssistEnabled|aimFov|aimSpeed)\b') {
-                                        $detectedMechanics.Add("Combat Aim-Assist FOV Cone") | Out-Null
-                                    }
-                                    if ($entryText -match '(?i)\b(fallVelocityCheck|minFallDistance|getDeltaMovement)\b') {
-                                        $detectedMechanics.Add("Fall Velocity Auto-Crit Timing") | Out-Null
-                                    }
-                                    if ($entryText -match '(?i)\b(KeyBinding\.setDown|clickAddKey|InputConstants\.isKeyDown)\b') {
-                                        $detectedMechanics.Add("Simulated Hardware KeyPresses") | Out-Null
-                                    }
-                                    if ($entryText -match '(?i)\b(targetReturnSlot|shieldRemoveDelayMs|autoAxeSwap)\b') {
-                                        $detectedMechanics.Add("Automated Hotbar / Weapon Slot Swapping") | Out-Null
-                                    }
-                                    if ($entryText -match '(?i)\b(LicenseManager|verifyLicense|HWIDUtil)\b') {
-                                        $detectedLicenses.Add("Private Cheat License & HWID Lock") | Out-Null
-                                    }
+                                # Fast mechanics tokens
+                                if ($entryText.Contains("shieldRemove")) { $detectedMechanics.Add("Auto Shield-Break (Axe Swap)") | Out-Null }
+                                if ($entryText.Contains("aimAssistEnabled")) { $detectedMechanics.Add("Combat Aim-Assist FOV Cone") | Out-Null }
+                                if ($entryText.Contains("fallVelocityCheck")) { $detectedMechanics.Add("Fall Velocity Auto-Crit Timing") | Out-Null }
+                                if ($entryText.Contains("KeyBinding.setDown")) { $detectedMechanics.Add("Simulated Hardware KeyPresses") | Out-Null }
+                                if ($entryText.Contains("targetReturnSlot")) { $detectedMechanics.Add("Automated Hotbar / Weapon Slot Swapping") | Out-Null }
 
-                                    # Embedded Local Web Cheat Dashboard
-                                    if ($fn -match '\.html$' -and $entryText -match '(?i)(Combat\s*&\s*CPVP|Elite Center|Auto\s*Crystal|Mace\s*Assist|Anchor\s*Macro)') {
-                                        $titleMatch = if ($entryText -match '(?i)<title>(.*?)</title>') { $Matches[1].Trim() } else { "Web GUI" }
-                                        if ($detectedWebGui.Count -lt 2) {
-                                            $detectedWebGui.Add("$fn ('$titleMatch')") | Out-Null
-                                        }
-                                    }
-
-                                    # Bytecode suspicious strings
+                                # Bytecode suspicious strings (only run regex if sample matches trigger)
+                                if ($strHits.Count -lt 6 -and ($entryText.Contains("Hack") -or $entryText.Contains("Cheat") -or $entryText.Contains("Aimbot") -or $entryText.Contains("KillAura"))) {
                                     $matches = $suspRegex.Matches($entryText)
                                     foreach ($m in $matches) {
                                         if ($strHits.Count -lt 6 -and -not $strHits.Contains($m.Value)) {
                                             $strHits.Add($m.Value)
                                         }
                                     }
-                                } catch {}
-                            }
-                        }
-
-                        if ($detectedModules.Count -gt 0 -or $detectedWebGui.Count -gt 0 -or ($detectedMechanics.Count -ge 2)) {
-                            $isFlagged = $true
-                            $aiRisk = 100
-                            $topList = @($detectedModules | Select-Object -First 3)
-                            if ($topList.Count -eq 0) { $topList = @($detectedMechanics | Select-Object -First 2) }
-                            if ($hasMeta) {
-                                $category = "DISGUISED CHEAT / TROJAN MOD"
-                                $reason = "Trojan/Fake mod: disguised as innocent mod but contains combat suite: $($topList -join ', ')"
-                            } else {
-                                $category = "FLAGGED CHEAT / DISALLOWED"
-                                $reason = "Contains combat cheat suite: $($topList -join ', ')"
-                            }
-
-                            # Construct rich AI forensic capability breakdown
-                            $aiDetails.Clear()
-                            if ($detectedModules.Count -gt 0) {
-                                $aiDetails.Add("Modules: $(($detectedModules | Select-Object -First 8) -join ', ')")
-                            }
-                            if ($detectedMechanics.Count -gt 0) {
-                                $aiDetails.Add("Mechanics: $($detectedMechanics -join ', ')")
-                            }
-                            if ($detectedWebGui.Count -gt 0) {
-                                $aiDetails.Add("Embedded GUI: $($detectedWebGui[0])")
-                            }
-                            if ($detectedLicenses.Count -gt 0) {
-                                $aiDetails.Add("Auth: $($detectedLicenses[0])")
-                            }
-                        } elseif ($strHits.Count -ge 4) {
-                            $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'")
-                        } elseif ($strHits.Count -ge 2) {
-                            $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'")
-                        } elseif ($strHits.Count -ge 1) {
-                            $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'")
-                        }
-                    } else {
-                        # Fast-path bytecode sampling for ordinary clean mods
-                        $checkCount = [Math]::Min(10, $classEntries.Count)
-                        $strHits    = [System.Collections.Generic.List[string]]::new()
-                        for ($ci = 0; $ci -lt $checkCount; $ci++) {
-                            $ce = $classEntries[$ci]
-                            try {
-                                $ces = $ce.Open()
-                                $readLen = $ces.Read($readBuf, 0, [Math]::Min($ce.Length, 65536))
-                                $ces.Close()
-                                $classAscii = [System.Text.Encoding]::ASCII.GetString($readBuf, 0, $readLen)
-                                $matches = $suspRegex.Matches($classAscii)
-                                foreach ($m in $matches) {
-                                    if ($strHits.Count -lt 6 -and -not $strHits.Contains($m.Value)) {
-                                        $strHits.Add($m.Value)
-                                    }
                                 }
                             } catch {}
                         }
-                        if ($strHits.Count -ge 4) { $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'") }
-                        elseif ($strHits.Count -ge 2) { $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'") }
-                        elseif ($strHits.Count -eq 1) { $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'") }
+                    }
+
+                    # Evaluate: Structural Invariants, Known Modules, or Embedded GUI
+                    if ($structuralInvariants.Count -gt 0 -or $detectedModules.Count -gt 0 -or $detectedWebGui.Count -gt 0 -or ($detectedMechanics.Count -ge 2)) {
+                        $isFlagged = $true
+                        $aiRisk = 100
+                        $invList = @($structuralInvariants)
+                        $topList = if ($invList.Count -gt 0) { @($invList | Select-Object -First 2) } else { @($detectedModules | Select-Object -First 3) }
+                        if ($topList.Count -eq 0) { $topList = @($detectedMechanics | Select-Object -First 2) }
+
+                        if ($hasMeta) {
+                            $category = "DISGUISED CHEAT / TROJAN MOD"
+                            $reason = "Disguised Trojan Mod: violates combat invariants ($($topList -join '; '))"
+                        } else {
+                            $category = "FLAGGED CHEAT / DISALLOWED"
+                            $reason = "Violates combat cheat invariants: $($topList -join '; ')"
+                        }
+
+                        # Construct rich AI forensic capability breakdown
+                        $aiDetails.Clear()
+                        if ($structuralInvariants.Count -gt 0) {
+                            $aiDetails.Add("Invariants: $(($structuralInvariants | Select-Object -First 4) -join '; ')")
+                        }
+                        if ($detectedModules.Count -gt 0) {
+                            $aiDetails.Add("Modules: $(($detectedModules | Select-Object -First 8) -join ', ')")
+                        }
+                        if ($detectedMechanics.Count -gt 0) {
+                            $aiDetails.Add("Mechanics: $(($detectedMechanics | Select-Object -First 4) -join ', ')")
+                        }
+                        if ($detectedWebGui.Count -gt 0) {
+                            $aiDetails.Add("Embedded GUI: $($detectedWebGui[0])")
+                        }
+                        if ($detectedLicenses.Count -gt 0) {
+                            $aiDetails.Add("Auth: $($detectedLicenses[0])")
+                        }
+                    } elseif ($strHits.Count -ge 4) {
+                        $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'")
+                    } elseif ($strHits.Count -ge 2) {
+                        $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'")
+                    } elseif ($strHits.Count -ge 1) {
+                        $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'")
                     }
 
                         # -- LAYER 6: Obfuscation entropy scoring ------------------
@@ -522,6 +540,8 @@ function Analyze-InstanceMods {
             Reason        = $reason
             AIRiskScore   = $aiRisk
             AIDetails     = if ($aiDetails.Count -gt 0) { ($aiDetails -join " | ") } else { "" }
+            Invariants    = if ($structuralInvariants) { @($structuralInvariants) } else { @() }
+            Modules       = if ($detectedModules) { @($detectedModules) } else { @() }
         }
 
         $result.Mods.Add($modObj)

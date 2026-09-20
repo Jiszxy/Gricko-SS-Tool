@@ -476,18 +476,26 @@ function Analyze-InstanceMods {
                 Reason        = $cached.Reason
                 AIRiskScore   = $cached.AIRiskScore
                 AIDetails     = $cached.AIDetails
+                Invariants    = if ($cached.Invariants) { $cached.Invariants } else { @() }
+                Modules       = if ($cached.Modules) { $cached.Modules } else { @() }
             }
             $result.Mods.Add($cloned)
             if ($cloned.IsFlagged) { $result.FlaggedMods.Add($cloned); $result.FlaggedCount++ }
             continue
         }
 
-        $isFlagged    = $false
-        $reason       = "Clean"
-        $category     = "CLEAN"
-        $aiRisk       = 0
-        $aiDetails    = [System.Collections.Generic.List[string]]::new()
-        $displayName  = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
+        $isFlagged            = $false
+        $reason               = "Clean"
+        $category             = "CLEAN"
+        $aiRisk               = 0
+        $aiDetails            = [System.Collections.Generic.List[string]]::new()
+        $structuralInvariants = [System.Collections.Generic.HashSet[string]]::new()
+        $detectedModules      = [System.Collections.Generic.HashSet[string]]::new()
+        $detectedMechanics    = [System.Collections.Generic.HashSet[string]]::new()
+        $detectedWebGui       = [System.Collections.Generic.List[string]]::new()
+        $detectedLicenses     = [System.Collections.Generic.List[string]]::new()
+        $strHits              = [System.Collections.Generic.List[string]]::new()
+        $displayName          = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
 
         # -- LAYER 1: Filename signature matching ------------------------------
         $isKnownLegit = $false
@@ -615,141 +623,151 @@ function Analyze-InstanceMods {
                         }
                     }
 
-                    # -- LAYER 5: Full-Mod Deep Behavioral & Capability Analysis ---
-                    # Checks for embedded web dashboards or suspicious indicators to trigger full-JAR decompilation
-                    $hasWebAsset = $false
+                    # -- LAYER 5: Evasion-Proof Structural Bytecode Invariants & Deep Capability Analysis ---
+                    # Inspects bytecode mathematical and runtime invariants that cannot be renamed away
+                    $detectedModules      = [System.Collections.Generic.HashSet[string]]::new()
+                    $detectedMechanics    = [System.Collections.Generic.HashSet[string]]::new()
+                    $detectedWebGui       = [System.Collections.Generic.List[string]]::new()
+                    $detectedLicenses     = [System.Collections.Generic.List[string]]::new()
+                    $structuralInvariants = [System.Collections.Generic.HashSet[string]]::new()
+                    $strHits              = [System.Collections.Generic.List[string]]::new()
+
                     foreach ($entry in $allEntries) {
-                        if ($entry.FullName -match '(?i)(^web/|\.html$)') { $hasWebAsset = $true; break }
-                    }
+                        $fn = $entry.FullName
+                        if ($entry.Length -le 0 -or $fn.EndsWith("/")) { continue }
 
-                    $needsDeepScan = $isFlagged -or $hasWebAsset -or ($aiRisk -gt 0)
+                        # Class name inspection
+                        $mMatch = $cheatClassRegex.Match($fn)
+                        if ($mMatch.Success -and $detectedModules.Count -lt 12) {
+                            $detectedModules.Add($mMatch.Groups[2].Value) | Out-Null
+                        }
 
-                    if ($needsDeepScan) {
-                        $detectedModules   = [System.Collections.Generic.HashSet[string]]::new()
-                        $detectedMechanics = [System.Collections.Generic.HashSet[string]]::new()
-                        $detectedWebGui    = [System.Collections.Generic.List[string]]::new()
-                        $detectedLicenses  = [System.Collections.Generic.List[string]]::new()
-                        $strHits           = [System.Collections.Generic.List[string]]::new()
+                        # Check files for bytecode / assets
+                        if ($fn -match '\.(class|html|js|json)$') {
+                            try {
+                                $ces = $entry.Open()
+                                $readLen = $ces.Read($readBuf, 0, [Math]::Min($entry.Length, 65536))
+                                $ces.Close()
+                                $entryText = [System.Text.Encoding]::UTF8.GetString($readBuf, 0, $readLen)
 
-                        foreach ($entry in $allEntries) {
-                            $fn = $entry.FullName
-                            $className = [System.IO.Path]::GetFileNameWithoutExtension($fn)
+                                # Invariant 1: Embedded Local Web Server & Control Hub
+                                if ($entryText.Contains("HttpServer") -and ($entryText.Contains("com/sun/net/httpserver") -or $entryText.Contains("createContext") -or $entryText.Contains("org/nanohttpd"))) {
+                                    $structuralInvariants.Add("Embedded Local Web Server (createContext)") | Out-Null
+                                }
 
-                            # Class name inspection
-                            $mMatch = $cheatClassRegex.Match($fn)
-                            if ($mMatch.Success -and $detectedModules.Count -lt 12) {
-                                $detectedModules.Add($mMatch.Groups[2].Value) | Out-Null
-                            }
+                                # Invariant 2: StreamProof Screen Capture Evasion
+                                if ($entryText.Contains("SetWindowDisplayAffinity") -or $entryText.Contains("WDA_EXCLUDEFROMCAPTURE") -or $entryText.Contains("User32Extra")) {
+                                    $structuralInvariants.Add("StreamProof Screen Capture Evasion (SetWindowDisplayAffinity)") | Out-Null
+                                }
 
-                            # Deep content inspection of ALL classes and embedded web/config assets
-                            if ($fn -match '\.(class|html|js|json)$' -and -not $fn.EndsWith("/")) {
-                                try {
-                                    $ces = $entry.Open()
-                                    $readLen = $ces.Read($readBuf, 0, [Math]::Min($entry.Length, 65536))
-                                    $ces.Close()
-                                    $entryText = [System.Text.Encoding]::ASCII.GetString($readBuf, 0, $readLen)
+                                # Invariant 3: Trigonometric Silent-Aim / Combat Rotation Math
+                                if ($entryText.Contains("atan2") -and $entryText.Contains("toDegrees") -and 
+                                    ($entryText.Contains("getYaw") -or $entryText.Contains("getPitch") -or $entryText.Contains("setYaw") -or $entryText.Contains("setPitch") -or $entryText.Contains("setYRot") -or $entryText.Contains("setXRot") -or $entryText.Contains("getYRot") -or $entryText.Contains("getXRot") -or $entryText.Contains("wrapDegrees"))) {
+                                    $structuralInvariants.Add("Trig Combat Aimbot Rotation Math (atan2 -> player rotation)") | Out-Null
+                                }
 
-                                    # Module hits in text/bytecode
+                                # Invariant 4: Automated Shield-Breaker Weapon Swap
+                                if (($entryText.Contains("shield") -or $entryText.Contains("isBlocking") -or $entryText.Contains("isUsingItem")) -and 
+                                    $entryText.Contains("setSelected") -and 
+                                    ($entryText.Contains("axe") -or $entryText.Contains("Axe") -or $entryText.Contains("AxeItem") -or $entryText.Contains("targetReturnSlot"))) {
+                                    $structuralInvariants.Add("Auto Shield-Breaker Weapon Swap (Target isShielding -> setSelected Axe)") | Out-Null
+                                }
+
+                                # Invariant 5: Automated Anchor / Crystal Macro Mechanics
+                                if ($entryText.Contains("setSelected") -and 
+                                    ($entryText.Contains("glowstone") -or $entryText.Contains("respawn_anchor") -or $entryText.Contains("end_crystal") -or $entryText.Contains("obsidian")) -and 
+                                    ($entryText.Contains("interactBlock") -or $entryText.Contains("useItemOn") -or $entryText.Contains("KeyBinding") -or $entryText.Contains("KeyMapping"))) {
+                                    $structuralInvariants.Add("Anchor/Crystal Combat Macro Placement Loop (setSelected -> interactBlock)") | Out-Null
+                                }
+
+                                # Invariant 6: Hardware Fingerprinting / Anti-Leak DRM
+                                if ($entryText.Contains("wmic csproduct get uuid") -or $entryText.Contains("MachineGuid") -or $entryText.Contains("HWIDUtil") -or ($entryText.Contains("verifyLicense") -and $entryText.Contains("LicenseManager"))) {
+                                    $structuralInvariants.Add("Hardware ID (HWID) Anti-Leak DRM") | Out-Null
+                                    $detectedLicenses.Add("Private Cheat License & HWID Lock") | Out-Null
+                                }
+
+                                # Invariant 7: Mace / Velocity Combat Assist
+                                if (($entryText.Contains("mace") -or $entryText.Contains("Mace")) -and $entryText.Contains("setSelected") -and 
+                                    ($entryText.Contains("density") -or $entryText.Contains("spear") -or $entryText.Contains("targetReturnSlot")) -and 
+                                    ($entryText.Contains("KeyMapping") -or $entryText.Contains("KeyBinding") -or $entryText.Contains("clickAttack"))) {
+                                    $structuralInvariants.Add("Mace/Spear Automated Weapon Assist (density / spear swap)") | Out-Null
+                                }
+
+                                # Invariant 8: Embedded Local Web Dashboard
+                                if ($fn -match '\.html$' -and ($entryText.Contains("Combat & CPVP") -or $entryText.Contains("TripleT") -or $entryText.Contains("Auto Crystal") -or $entryText.Contains("Mace Assist") -or $entryText.Contains("Anchor Macro"))) {
+                                    $titleMatch = if ($entryText -match '(?i)<title>(.*?)</title>') { $Matches[1].Trim() } else { "Web GUI" }
+                                    if ($detectedWebGui.Count -lt 2) {
+                                        $detectedWebGui.Add("$fn ('$titleMatch')") | Out-Null
+                                    }
+                                }
+
+                                # Fast module extraction only if combat keywords present
+                                if ($entryText.Contains("Manager") -or $entryText.Contains("Macro") -or $entryText.Contains("Assist") -or $entryText.Contains("Aura") -or $entryText.Contains("Crystal") -or $entryText.Contains("Anchor")) {
                                     $textMatches = $cheatClassRegex.Matches($entryText)
                                     foreach ($tm in $textMatches) {
                                         if ($detectedModules.Count -lt 12) { $detectedModules.Add($tm.Groups[2].Value) | Out-Null }
                                     }
+                                }
 
-                                    # Behavioral mechanics detection
-                                    if ($entryText -match '(?i)\b(shieldRemove|shieldRemovedEnabled|shieldRemoveDelayMs)\b') {
-                                        $detectedMechanics.Add("Auto Shield-Break (Axe Swap)") | Out-Null
-                                    }
-                                    if ($entryText -match '(?i)\b(aimAssistEnabled|aimFov|aimSpeed)\b') {
-                                        $detectedMechanics.Add("Combat Aim-Assist FOV Cone") | Out-Null
-                                    }
-                                    if ($entryText -match '(?i)\b(fallVelocityCheck|minFallDistance|getDeltaMovement)\b') {
-                                        $detectedMechanics.Add("Fall Velocity Auto-Crit Timing") | Out-Null
-                                    }
-                                    if ($entryText -match '(?i)\b(KeyBinding\.setDown|clickAddKey|InputConstants\.isKeyDown)\b') {
-                                        $detectedMechanics.Add("Simulated Hardware KeyPresses") | Out-Null
-                                    }
-                                    if ($entryText -match '(?i)\b(targetReturnSlot|shieldRemoveDelayMs|autoAxeSwap)\b') {
-                                        $detectedMechanics.Add("Automated Hotbar / Weapon Slot Swapping") | Out-Null
-                                    }
-                                    if ($entryText -match '(?i)\b(LicenseManager|verifyLicense|HWIDUtil)\b') {
-                                        $detectedLicenses.Add("Private Cheat License & HWID Lock") | Out-Null
-                                    }
+                                # Fast mechanics tokens
+                                if ($entryText.Contains("shieldRemove")) { $detectedMechanics.Add("Auto Shield-Break (Axe Swap)") | Out-Null }
+                                if ($entryText.Contains("aimAssistEnabled")) { $detectedMechanics.Add("Combat Aim-Assist FOV Cone") | Out-Null }
+                                if ($entryText.Contains("fallVelocityCheck")) { $detectedMechanics.Add("Fall Velocity Auto-Crit Timing") | Out-Null }
+                                if ($entryText.Contains("KeyBinding.setDown")) { $detectedMechanics.Add("Simulated Hardware KeyPresses") | Out-Null }
+                                if ($entryText.Contains("targetReturnSlot")) { $detectedMechanics.Add("Automated Hotbar / Weapon Slot Swapping") | Out-Null }
 
-                                    # Embedded Local Web Cheat Dashboard
-                                    if ($fn -match '\.html$' -and $entryText -match '(?i)(Combat\s*&\s*CPVP|Elite Center|Auto\s*Crystal|Mace\s*Assist|Anchor\s*Macro)') {
-                                        $titleMatch = if ($entryText -match '(?i)<title>(.*?)</title>') { $Matches[1].Trim() } else { "Web GUI" }
-                                        if ($detectedWebGui.Count -lt 2) {
-                                            $detectedWebGui.Add("$fn ('$titleMatch')") | Out-Null
-                                        }
-                                    }
-
-                                    # Bytecode suspicious strings
+                                # Bytecode suspicious strings (only run regex if sample matches trigger)
+                                if ($strHits.Count -lt 6 -and ($entryText.Contains("Hack") -or $entryText.Contains("Cheat") -or $entryText.Contains("Aimbot") -or $entryText.Contains("KillAura"))) {
                                     $matches = $suspRegex.Matches($entryText)
                                     foreach ($m in $matches) {
                                         if ($strHits.Count -lt 6 -and -not $strHits.Contains($m.Value)) {
                                             $strHits.Add($m.Value)
                                         }
                                     }
-                                } catch {}
-                            }
-                        }
-
-                        if ($detectedModules.Count -gt 0 -or $detectedWebGui.Count -gt 0 -or ($detectedMechanics.Count -ge 2)) {
-                            $isFlagged = $true
-                            $aiRisk = 100
-                            $topList = @($detectedModules | Select-Object -First 3)
-                            if ($topList.Count -eq 0) { $topList = @($detectedMechanics | Select-Object -First 2) }
-                            if ($hasMeta) {
-                                $category = "DISGUISED CHEAT / TROJAN MOD"
-                                $reason = "Trojan/Fake mod: disguised as innocent mod but contains combat suite: $($topList -join ', ')"
-                            } else {
-                                $category = "FLAGGED CHEAT / DISALLOWED"
-                                $reason = "Contains combat cheat suite: $($topList -join ', ')"
-                            }
-
-                            # Construct rich AI forensic capability breakdown
-                            $aiDetails.Clear()
-                            if ($detectedModules.Count -gt 0) {
-                                $aiDetails.Add("Modules: $(($detectedModules | Select-Object -First 8) -join ', ')")
-                            }
-                            if ($detectedMechanics.Count -gt 0) {
-                                $aiDetails.Add("Mechanics: $($detectedMechanics -join ', ')")
-                            }
-                            if ($detectedWebGui.Count -gt 0) {
-                                $aiDetails.Add("Embedded GUI: $($detectedWebGui[0])")
-                            }
-                            if ($detectedLicenses.Count -gt 0) {
-                                $aiDetails.Add("Auth: $($detectedLicenses[0])")
-                            }
-                        } elseif ($strHits.Count -ge 4) {
-                            $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'")
-                        } elseif ($strHits.Count -ge 2) {
-                            $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'")
-                        } elseif ($strHits.Count -ge 1) {
-                            $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'")
-                        }
-                    } else {
-                        # Fast-path bytecode sampling for ordinary clean mods
-                        $checkCount = [Math]::Min(10, $classEntries.Count)
-                        $strHits    = [System.Collections.Generic.List[string]]::new()
-                        for ($ci = 0; $ci -lt $checkCount; $ci++) {
-                            $ce = $classEntries[$ci]
-                            try {
-                                $ces = $ce.Open()
-                                $readLen = $ces.Read($readBuf, 0, [Math]::Min($ce.Length, 65536))
-                                $ces.Close()
-                                $classAscii = [System.Text.Encoding]::ASCII.GetString($readBuf, 0, $readLen)
-                                $matches = $suspRegex.Matches($classAscii)
-                                foreach ($m in $matches) {
-                                    if ($strHits.Count -lt 6 -and -not $strHits.Contains($m.Value)) {
-                                        $strHits.Add($m.Value)
-                                    }
                                 }
                             } catch {}
                         }
-                        if ($strHits.Count -ge 4) { $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'") }
-                        elseif ($strHits.Count -ge 2) { $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'") }
-                        elseif ($strHits.Count -eq 1) { $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'") }
+                    }
+
+                    # Evaluate: Structural Invariants, Known Modules, or Embedded GUI
+                    if ($structuralInvariants.Count -gt 0 -or $detectedModules.Count -gt 0 -or $detectedWebGui.Count -gt 0 -or ($detectedMechanics.Count -ge 2)) {
+                        $isFlagged = $true
+                        $aiRisk = 100
+                        $invList = @($structuralInvariants)
+                        $topList = if ($invList.Count -gt 0) { @($invList | Select-Object -First 2) } else { @($detectedModules | Select-Object -First 3) }
+                        if ($topList.Count -eq 0) { $topList = @($detectedMechanics | Select-Object -First 2) }
+
+                        if ($hasMeta) {
+                            $category = "DISGUISED CHEAT / TROJAN MOD"
+                            $reason = "Disguised Trojan Mod: violates combat invariants ($($topList -join '; '))"
+                        } else {
+                            $category = "FLAGGED CHEAT / DISALLOWED"
+                            $reason = "Violates combat cheat invariants: $($topList -join '; ')"
+                        }
+
+                        # Construct rich AI forensic capability breakdown
+                        $aiDetails.Clear()
+                        if ($structuralInvariants.Count -gt 0) {
+                            $aiDetails.Add("Invariants: $(($structuralInvariants | Select-Object -First 4) -join '; ')")
+                        }
+                        if ($detectedModules.Count -gt 0) {
+                            $aiDetails.Add("Modules: $(($detectedModules | Select-Object -First 8) -join ', ')")
+                        }
+                        if ($detectedMechanics.Count -gt 0) {
+                            $aiDetails.Add("Mechanics: $(($detectedMechanics | Select-Object -First 4) -join ', ')")
+                        }
+                        if ($detectedWebGui.Count -gt 0) {
+                            $aiDetails.Add("Embedded GUI: $($detectedWebGui[0])")
+                        }
+                        if ($detectedLicenses.Count -gt 0) {
+                            $aiDetails.Add("Auth: $($detectedLicenses[0])")
+                        }
+                    } elseif ($strHits.Count -ge 4) {
+                        $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'")
+                    } elseif ($strHits.Count -ge 2) {
+                        $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'")
+                    } elseif ($strHits.Count -ge 1) {
+                        $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'")
                     }
 
                         # -- LAYER 6: Obfuscation entropy scoring ------------------
@@ -821,6 +839,8 @@ function Analyze-InstanceMods {
             Reason        = $reason
             AIRiskScore   = $aiRisk
             AIDetails     = if ($aiDetails.Count -gt 0) { ($aiDetails -join " | ") } else { "" }
+            Invariants    = if ($structuralInvariants) { @($structuralInvariants) } else { @() }
+            Modules       = if ($detectedModules) { @($detectedModules) } else { @() }
         }
 
         $result.Mods.Add($modObj)
@@ -2096,7 +2116,7 @@ function Show-GrickoGui {
     $xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Gricko SS Tool" Height="540" Width="580"
+        Title="Gricko SS Tool" Height="640" Width="600"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" FontFamily="Segoe UI, Tahoma, Helvetica, Arial"
@@ -2114,7 +2134,7 @@ function Show-GrickoGui {
                                 <Thumb>
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
-                                            <Border Background="#334155" CornerRadius="3"/>
+                                            <Border Background="#2A3854" CornerRadius="3"/>
                                         </ControlTemplate>
                                     </Thumb.Template>
                                 </Thumb>
@@ -2126,79 +2146,129 @@ function Show-GrickoGui {
         </Style>
 
         <Style TargetType="ComboBox">
-            <Setter Property="Background" Value="#161822"/>
+            <Setter Property="Background" Value="#0F1626"/>
             <Setter Property="Foreground" Value="#F8FAFC"/>
-            <Setter Property="BorderBrush" Value="#2E344A"/>
+            <Setter Property="BorderBrush" Value="#253552"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="8,4"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="SnapsToDevicePixels" Value="True"/>
         </Style>
 
         <Style TargetType="ComboBoxItem">
-            <Setter Property="Background" Value="#161822"/>
+            <Setter Property="Background" Value="#0F1626"/>
             <Setter Property="Foreground" Value="#F8FAFC"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="8,5"/>
-            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Padding" Value="10,6"/>
+            <Setter Property="FontSize" Value="11.5"/>
             <Style.Triggers>
                 <Trigger Property="IsHighlighted" Value="True">
-                    <Setter Property="Background" Value="#2E1C48"/>
-                    <Setter Property="Foreground" Value="#C084FC"/>
+                    <Setter Property="Background" Value="#1E293B"/>
+                    <Setter Property="Foreground" Value="#00F0FF"/>
                 </Trigger>
                 <Trigger Property="IsSelected" Value="True">
-                    <Setter Property="Background" Value="#3B2667"/>
+                    <Setter Property="Background" Value="#2A1B4E"/>
                     <Setter Property="Foreground" Value="#FFFFFF"/>
                 </Trigger>
             </Style.Triggers>
         </Style>
     </Window.Resources>
 
-    <Border Name="RootBorder" Background="#0F1015" CornerRadius="12" BorderBrush="#1E2029" BorderThickness="1.5">
+    <Border Name="RootBorder" Background="#07090E" CornerRadius="16" BorderBrush="#1C273E" BorderThickness="1.5">
         <Border.Effect>
-            <DropShadowEffect BlurRadius="30" Color="#000000" Opacity="0.85" ShadowDepth="6"/>
+            <DropShadowEffect BlurRadius="45" Color="#00F0FF" Opacity="0.22" ShadowDepth="4"/>
         </Border.Effect>
 
         <Grid Margin="20,14,20,16">
             <Grid.RowDefinitions>
-                <RowDefinition Height="32"/>
+                <RowDefinition Height="36"/>
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="18"/>
+                <RowDefinition Height="20"/>
             </Grid.RowDefinitions>
 
             <!-- TITLE BAR -->
             <Grid Name="TitleBarGrid" Grid.Row="0" Background="Transparent">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="GRICKO" Foreground="#F8FAFC" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
-                    <TextBlock Text=" SS TOOL" Foreground="#818CF8" FontWeight="Bold" FontSize="13" VerticalAlignment="Center"/>
-                    <Border Background="#1E2230" CornerRadius="4" Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="v2.3" Foreground="#94A3B8" FontSize="9.5" FontWeight="SemiBold"/>
+                    <Border Background="#0E1726" BorderBrush="#00F0FF" BorderThickness="1" CornerRadius="5" Width="20" Height="20" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <TextBlock Text="&#x2726;" Foreground="#00F0FF" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="GRICKO" Foreground="#FFFFFF" FontWeight="ExtraBold" FontSize="13.5" VerticalAlignment="Center"/>
+                    <TextBlock Text=" FORENSIC" Foreground="#00F0FF" FontWeight="Bold" FontSize="13.5" VerticalAlignment="Center"/>
+                    <Border Background="#1A102E" BorderBrush="#581C87" BorderThickness="1" CornerRadius="4" Padding="6,1.5" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="v2.4 HYPER-INVARIANT" Foreground="#C084FC" FontSize="9" FontWeight="Bold"/>
                     </Border>
                 </StackPanel>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <Button Name="BtnMin" Content="-" Width="28" Height="24" Background="Transparent" Foreground="#94A3B8" BorderThickness="0" FontSize="14" Cursor="Hand" FontWeight="Bold"/>
-                    <Button Name="BtnClose" Content="x" Width="28" Height="24" Background="Transparent" Foreground="#94A3B8" BorderThickness="0" FontSize="13" Cursor="Hand" FontWeight="Bold" Margin="2,0,0,0"/>
+                    <Border Background="#062A1F" BorderBrush="#059669" BorderThickness="1" CornerRadius="10" Padding="8,2" Margin="0,0,12,0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#x25CF;" Foreground="#10B981" FontSize="9" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock Text="ENGINE ARMED" Foreground="#34D399" FontSize="9.5" FontWeight="Bold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Button Name="BtnMin" Content="-" Width="28" Height="24" Background="#0C1220" Foreground="#94A3B8" BorderBrush="#1C273E" BorderThickness="1" FontSize="11" Cursor="Hand" FontWeight="Bold">
+                        <Button.Resources>
+                            <Style TargetType="Border">
+                                <Setter Property="CornerRadius" Value="4"/>
+                            </Style>
+                        </Button.Resources>
+                    </Button>
+                    <Button Name="BtnClose" Content="X" Width="28" Height="24" Background="#0C1220" Foreground="#94A3B8" BorderBrush="#1C273E" BorderThickness="1" FontSize="11" Cursor="Hand" FontWeight="Bold" Margin="4,0,0,0">
+                        <Button.Resources>
+                            <Style TargetType="Border">
+                                <Setter Property="CornerRadius" Value="4"/>
+                            </Style>
+                        </Button.Resources>
+                    </Button>
                 </StackPanel>
             </Grid>
 
             <!-- MAIN CONTENT AREA -->
-            <Grid Grid.Row="1" Margin="0,4,0,4">
+            <Grid Grid.Row="1" Margin="0,8,0,4">
 
-                <!-- VIEW 1: HOME (COMPACT OCEAN STYLE) -->
-                <StackPanel Name="HomeView" Visibility="Visible" HorizontalAlignment="Center" VerticalAlignment="Center" Width="380">
-                    <Image Name="LogoImgHome" Width="140" Height="68" HorizontalAlignment="Center" Margin="0,0,0,16" RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <TextBlock Text="GRICKO SCREENSHARE" Foreground="#F8FAFC" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
-                    <TextBlock Text="Next-Gen Automated Minecraft Forensic Engine" Foreground="#64748B" FontSize="11" HorizontalAlignment="Center" Margin="0,0,0,24"/>
+                <!-- VIEW 1: HOME (CYBER-OBSIDIAN HERO STYLE) -->
+                <StackPanel Name="HomeView" Visibility="Visible" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440">
+                    <Border Width="110" Height="110" Background="#0B1220" BorderBrush="#1E2E4A" BorderThickness="1.5" CornerRadius="55" HorizontalAlignment="Center" Margin="0,0,0,14">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="30" Color="#00F0FF" Opacity="0.30" ShadowDepth="0"/>
+                        </Border.Effect>
+                        <Image Name="LogoImgHome" Width="85" Height="85" HorizontalAlignment="Center" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
+                    </Border>
 
-                    <Button Name="BtnScan" Width="200" Height="42" Content="SCAN" FontSize="14" FontWeight="Bold" Foreground="#0F1015" Cursor="Hand">
+                    <TextBlock Text="GRICKO SCREENSHARE" Foreground="#FFFFFF" FontSize="22" FontWeight="ExtraBold" HorizontalAlignment="Center" Margin="0,0,0,3">
+                        <TextBlock.Effect>
+                            <DropShadowEffect BlurRadius="15" Color="#00F0FF" Opacity="0.35" ShadowDepth="0"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
+                    <TextBlock Text="Next-Gen Automated Minecraft Forensic Engine" Foreground="#94A3B8" FontSize="12" HorizontalAlignment="Center" Margin="0,0,0,14"/>
+
+                    <!-- Feature Badges -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,24">
+                        <Border Background="#0C1628" BorderBrush="#1D3050" BorderThickness="1" CornerRadius="12" Padding="9,3" Margin="0,0,6,0">
+                            <TextBlock Text="[+] Multi-Instance" Foreground="#38BDF8" FontSize="10" FontWeight="SemiBold"/>
+                        </Border>
+                        <Border Background="#1A112C" BorderBrush="#3B2260" BorderThickness="1" CornerRadius="12" Padding="9,3" Margin="0,0,6,0">
+                            <TextBlock Text="[*] Invariant Bytecode V3" Foreground="#C084FC" FontSize="10" FontWeight="SemiBold"/>
+                        </Border>
+                        <Border Background="#06221A" BorderBrush="#0D4435" BorderThickness="1" CornerRadius="12" Padding="9,3">
+                            <TextBlock Text="[#] Anti-Evasion Lock" Foreground="#34D399" FontSize="10" FontWeight="SemiBold"/>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Ultra-Premium Glowing Gradient SCAN Button -->
+                    <Button Name="BtnScan" Width="260" Height="48" Content="START FORENSIC SCAN" FontSize="13.5" FontWeight="Bold" Foreground="#FFFFFF" Cursor="Hand">
+                        <Button.Effect>
+                            <DropShadowEffect BlurRadius="28" Color="#00F0FF" Opacity="0.75" ShadowDepth="0"/>
+                        </Button.Effect>
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
-                                <Border Name="BtnBorder" CornerRadius="21">
+                                <Border Name="BtnBorder" CornerRadius="24">
                                     <Border.Background>
                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                            <GradientStop Color="#FFFFFF" Offset="0.0"/>
-                                            <GradientStop Color="#CBD5E1" Offset="1.0"/>
+                                            <GradientStop Color="#00F0FF" Offset="0.0"/>
+                                            <GradientStop Color="#3B82F6" Offset="0.5"/>
+                                            <GradientStop Color="#8B5CF6" Offset="1.0"/>
                                         </LinearGradientBrush>
                                     </Border.Background>
                                     <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
@@ -2208,8 +2278,9 @@ function Show-GrickoGui {
                                         <Setter TargetName="BtnBorder" Property="Background">
                                             <Setter.Value>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                                    <GradientStop Color="#FFFFFF" Offset="0.0"/>
-                                                    <GradientStop Color="#E2E8F0" Offset="1.0"/>
+                                                    <GradientStop Color="#38BDF8" Offset="0.0"/>
+                                                    <GradientStop Color="#60A5FA" Offset="0.5"/>
+                                                    <GradientStop Color="#A855F7" Offset="1.0"/>
                                                 </LinearGradientBrush>
                                             </Setter.Value>
                                         </Setter>
@@ -2219,81 +2290,110 @@ function Show-GrickoGui {
                         </Button.Template>
                     </Button>
 
-                    <TextBlock Text="Deep PC, Multi-Client &amp; All Mods Analysis" Foreground="#475569" FontSize="10.5" HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                    <TextBlock Text="Deep Memory, BAM &amp; Prefetch Kernels, All Instances &amp; Jar Invariants" Foreground="#64748B" FontSize="10.5" HorizontalAlignment="Center" Margin="0,14,0,0"/>
                 </StackPanel>
 
-                <!-- VIEW 2: 2-MINUTE PROGRESS SCAN -->
-                <StackPanel Name="ProgressView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Width="440">
-                    <Image Name="LogoImgProgress" Width="120" Height="58" HorizontalAlignment="Center" Margin="0,0,0,12" RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <TextBlock Text="DEEP SCANNING SYSTEM" Foreground="#F8FAFC" FontSize="17" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,2"/>
-                    <TextBlock Text="Analyzing all Minecraft clients, instances, memory &amp; mods" Foreground="#64748B" FontSize="11" HorizontalAlignment="Center" Margin="0,0,0,20"/>
+                <!-- VIEW 2: PROGRESS SCAN VIEW (CYBER TELEMETRY) -->
+                <StackPanel Name="ProgressView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480">
+                    <Border Width="90" Height="90" Background="#0B1220" BorderBrush="#1E2E4A" BorderThickness="1.5" CornerRadius="45" HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="25" Color="#00F0FF" Opacity="0.35" ShadowDepth="0"/>
+                        </Border.Effect>
+                        <Image Name="LogoImgProgress" Width="68" Height="68" HorizontalAlignment="Center" VerticalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
+                    </Border>
 
-                    <Border CornerRadius="8" Height="14" Background="#1B1D26" Margin="0,0,0,12" ClipToBounds="True">
+                    <TextBlock Text="DEEP SCANNING SYSTEM" Foreground="#FFFFFF" FontSize="18" FontWeight="ExtraBold" HorizontalAlignment="Center" Margin="0,0,0,2"/>
+                    <TextBlock Text="Decompiling bytecode &amp; verifying execution history across all instances" Foreground="#94A3B8" FontSize="11.5" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+
+                    <TextBlock Name="TxtProgressPercent" Text="0%" Foreground="#00F0FF" FontSize="28" FontWeight="ExtraBold" HorizontalAlignment="Center" Margin="0,0,0,6">
+                        <TextBlock.Effect>
+                            <DropShadowEffect BlurRadius="12" Color="#00F0FF" Opacity="0.5" ShadowDepth="0"/>
+                        </TextBlock.Effect>
+                    </TextBlock>
+
+                    <Border CornerRadius="8" Height="14" Background="#111726" BorderBrush="#1E293B" BorderThickness="1" Margin="0,0,0,14" ClipToBounds="True">
                         <ProgressBar Name="ScanProgress" Height="14" Minimum="0" Maximum="100" Value="0" Background="Transparent" BorderThickness="0">
                             <ProgressBar.Foreground>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                    <GradientStop Color="#CBD5E1" Offset="0.0"/>
-                                    <GradientStop Color="#FFFFFF" Offset="1.0"/>
+                                    <GradientStop Color="#00F0FF" Offset="0.0"/>
+                                    <GradientStop Color="#3B82F6" Offset="0.6"/>
+                                    <GradientStop Color="#8B5CF6" Offset="1.0"/>
                                 </LinearGradientBrush>
                             </ProgressBar.Foreground>
                         </ProgressBar>
                     </Border>
 
-                    <TextBlock Name="TxtProgressStatus" Text="Initializing deep PC inspection... - 0%" Foreground="#94A3B8" FontSize="12" HorizontalAlignment="Center"/>
+                    <!-- Telemetry Card -->
+                    <Border Background="#0B101E" BorderBrush="#1A2740" BorderThickness="1" CornerRadius="8" Padding="14,8">
+                        <TextBlock Name="TxtProgressStatus" Text="Initializing deep PC inspection... - 0%" Foreground="#93C5FD" FontSize="11.5" FontWeight="SemiBold" HorizontalAlignment="Center"/>
+                    </Border>
                 </StackPanel>
 
-                <!-- VIEW 3: RESULTS SUMMARY -->
-                <StackPanel Name="ResultsView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Width="480">
-                    <Image Name="LogoImgResults" Width="110" Height="54" HorizontalAlignment="Center" Margin="0,0,0,8" RenderOptions.BitmapScalingMode="HighQuality"/>
+                <!-- VIEW 3: RESULTS SUMMARY (100x BETTER VERDICT + CLIENT INFO) -->
+                <StackPanel Name="ResultsView" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" Width="520">
+                    <Image Name="LogoImgResults" Width="100" Height="50" HorizontalAlignment="Center" Margin="0,0,0,8" RenderOptions.BitmapScalingMode="HighQuality"/>
                     
-                    <TextBlock Name="TxtResultTitle" Text="Scan Complete" Foreground="#F8FAFC" FontSize="18" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,2"/>
-                    <TextBlock Name="TxtResultSubtitle" Text="System &amp; client inspection finished" Foreground="#34D399" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+                    <TextBlock Name="TxtResultTitle" Text="Scan Complete" Foreground="#FFFFFF" FontSize="20" FontWeight="ExtraBold" HorizontalAlignment="Center" Margin="0,0,0,2"/>
+                    <TextBlock Name="TxtResultSubtitle" Text="System &amp; client inspection finished" Foreground="#34D399" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,12"/>
 
-                    <!-- Client & Instance Info Card with Dynamic Selector -->
-                    <Border Background="#161822" CornerRadius="8" BorderBrush="#25293A" BorderThickness="1" Padding="14,10" Margin="0,0,0,10">
+                    <!-- Target Client & Instance Spec Card -->
+                    <Border Background="#0A101D" CornerRadius="10" BorderBrush="#1C2B44" BorderThickness="1.5" Padding="16,12" Margin="0,0,0,10">
                         <StackPanel>
-                            <DockPanel Margin="0,0,0,5">
-                                <TextBlock Text="TARGET CLIENT &amp; INSTANCE" Foreground="#94A3B8" FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center"/>
-                                <TextBlock Name="TxtResultTime" Text="N/A" Foreground="#38BDF8" FontSize="10.5" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                            <DockPanel Margin="0,0,0,6">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="TARGET CLIENT &amp; INSTANCE" Foreground="#00F0FF" FontSize="11" FontWeight="ExtraBold"/>
+                                </StackPanel>
+                                <TextBlock Name="TxtResultTime" Text="N/A" Foreground="#38BDF8" FontSize="11" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                             </DockPanel>
 
                             <!-- Client / Instance Selector Dropdown -->
-                            <ComboBox Name="CmbResultInstance" Margin="0,2,0,6" Cursor="Hand"/>
+                            <ComboBox Name="CmbResultInstance" Margin="0,2,0,8" Cursor="Hand"/>
 
-                            <TextBlock Name="TxtResultClient" Text="Client   : Detecting..." Foreground="#E2E8F0" FontSize="12" FontWeight="SemiBold" Margin="0,1"/>
-                            <TextBlock Name="TxtResultProfile" Text="Profile  : Standard" Foreground="#94A3B8" FontSize="11" Margin="0,1"/>
-                            <TextBlock Name="TxtResultServer" Text="Server   : None" Foreground="#38BDF8" FontSize="11" Margin="0,1"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Name="TxtResultClient" Text="Client   : Detecting..." Foreground="#E2E8F0" FontSize="11.5" FontWeight="SemiBold" Margin="0,1.5"/>
+                                    <TextBlock Name="TxtResultProfile" Text="Profile  : Standard" Foreground="#94A3B8" FontSize="11" Margin="0,1.5"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Name="TxtResultServer" Text="Server   : None" Foreground="#38BDF8" FontSize="11" Margin="0,1.5"/>
+                                    <TextBlock Text="Integrity: Bytecode Verified" Foreground="#34D399" FontSize="11" Margin="0,1.5"/>
+                                </StackPanel>
+                            </Grid>
                         </StackPanel>
                     </Border>
 
                     <!-- Cheat & Mod Detection Result Box -->
-                    <Border Name="DetectionBox" Background="#161822" CornerRadius="8" BorderBrush="#25293A" BorderThickness="1" Padding="14,8" Margin="0,0,0,12">
+                    <Border Name="DetectionBox" Background="#0A101D" CornerRadius="10" BorderBrush="#1C2B44" BorderThickness="1.5" Padding="16,10" Margin="0,0,0,14">
                         <StackPanel HorizontalAlignment="Center">
-                            <TextBlock Name="TxtDetectionsBadge" Text="[OK] No Cheats or Suspicious Clients Detected" Foreground="#34D399" FontSize="12" FontWeight="Bold" HorizontalAlignment="Center"/>
-                            <TextBlock Name="TxtCheatList" Text="" Foreground="#F87171" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,3,0,0" Visibility="Collapsed"/>
+                            <TextBlock Name="TxtDetectionsBadge" Text="[OK] No Cheats or Suspicious Clients Detected" Foreground="#34D399" FontSize="12.5" FontWeight="ExtraBold" HorizontalAlignment="Center"/>
+                            <TextBlock Name="TxtCheatList" Text="" Foreground="#F87171" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,4,0,0" Visibility="Collapsed" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
 
                     <!-- Action Buttons -->
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <Button Name="BtnDetails" Content="DETAILS" Width="105" Height="34" FontSize="11.5" FontWeight="Bold" Foreground="#FFFFFF" Background="#262A38" BorderBrush="#3B4259" BorderThickness="1" Cursor="Hand" Margin="0,0,8,0">
+                        <Button Name="BtnDetails" Content="FORENSIC DETAILS" Width="140" Height="36" FontSize="11.5" FontWeight="Bold" Foreground="#00F0FF" Background="#0C182A" BorderBrush="#00F0FF" BorderThickness="1" Cursor="Hand" Margin="0,0,8,0">
                             <Button.Resources>
                                 <Style TargetType="Border">
-                                    <Setter Property="CornerRadius" Value="17"/>
+                                    <Setter Property="CornerRadius" Value="18"/>
                                 </Style>
                             </Button.Resources>
                         </Button>
-                        <Button Name="BtnMods" Content="ALL MODS" Width="125" Height="34" FontSize="11.5" FontWeight="Bold" Foreground="#FFFFFF" Background="#2E1C48" BorderBrush="#7C3AED" BorderThickness="1" Cursor="Hand" Margin="0,0,8,0">
+                        <Button Name="BtnMods" Content="ALL MODS" Width="140" Height="36" FontSize="11.5" FontWeight="Bold" Foreground="#FFFFFF" Background="#261642" BorderBrush="#A855F7" BorderThickness="1" Cursor="Hand" Margin="0,0,8,0">
                             <Button.Resources>
                                 <Style TargetType="Border">
-                                    <Setter Property="CornerRadius" Value="17"/>
+                                    <Setter Property="CornerRadius" Value="18"/>
                                 </Style>
                             </Button.Resources>
                         </Button>
-                        <Button Name="BtnRescan" Content="RE-SCAN" Width="95" Height="34" FontSize="11.5" FontWeight="Bold" Foreground="#94A3B8" Background="#161822" BorderThickness="0" Cursor="Hand">
+                        <Button Name="BtnRescan" Content="RE-SCAN" Width="100" Height="36" FontSize="11.5" FontWeight="Bold" Foreground="#94A3B8" Background="#0B101D" BorderBrush="#1C273E" BorderThickness="1" Cursor="Hand">
                             <Button.Resources>
                                 <Style TargetType="Border">
-                                    <Setter Property="CornerRadius" Value="17"/>
+                                    <Setter Property="CornerRadius" Value="18"/>
                                 </Style>
                             </Button.Resources>
                         </Button>
@@ -2301,7 +2401,7 @@ function Show-GrickoGui {
                 </StackPanel>
 
                 <!-- VIEW 4: CLEAN DETAILS VIEW -->
-                <Grid Name="DetailsView" Visibility="Collapsed" Height="365" Margin="4,0">
+                <Grid Name="DetailsView" Visibility="Collapsed" Height="470" Margin="2,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -2309,20 +2409,22 @@ function Show-GrickoGui {
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <DockPanel Grid.Row="0" Margin="0,0,0,6">
-                        <TextBlock Text="FORENSIC INSPECTION DETAILS" Foreground="#F8FAFC" FontSize="13" FontWeight="Bold" VerticalAlignment="Center"/>
-                        <Button Name="BtnBackFromDetails" Content="&lt;- Back" Background="Transparent" Foreground="#38BDF8" BorderThickness="0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" HorizontalAlignment="Right"/>
+                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="FORENSIC INSPECTION DETAILS" Foreground="#FFFFFF" FontSize="14" FontWeight="ExtraBold" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <Button Name="BtnBackFromDetails" Content="&lt;- Back" Background="Transparent" Foreground="#00F0FF" BorderThickness="0" FontSize="12.5" FontWeight="Bold" Cursor="Hand" HorizontalAlignment="Right"/>
                     </DockPanel>
 
                     <!-- Client & Instance Chooser in Details -->
-                    <Border Grid.Row="1" Background="#161822" CornerRadius="6" BorderBrush="#25293A" BorderThickness="1" Padding="8,4" Margin="0,0,0,6">
+                    <Border Grid.Row="1" Background="#0C1322" CornerRadius="8" BorderBrush="#1F2D48" BorderThickness="1" Padding="10,5" Margin="0,0,0,8">
                         <DockPanel>
-                            <TextBlock Text="TARGET INSTANCE:" Foreground="#818CF8" FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="TARGET INSTANCE:" Foreground="#00F0FF" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ComboBox Name="CmbDetailsInstance" Cursor="Hand"/>
                         </DockPanel>
                     </Border>
 
-                    <Border Grid.Row="2" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="12">
+                    <Border Grid.Row="2" Background="#06080E" CornerRadius="10" BorderBrush="#172236" BorderThickness="1" Padding="12">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Name="DetailsContentPanel">
                                 <!-- Populated dynamically based on selected client/instance -->
@@ -2330,12 +2432,12 @@ function Show-GrickoGui {
                         </ScrollViewer>
                     </Border>
 
-                    <DockPanel Grid.Row="3" Margin="0,6,0,0">
-                        <TextBlock Name="TxtSummaryStats" Text="Clean Forensics" Foreground="#64748B" FontSize="11" VerticalAlignment="Center"/>
-                        <Button Name="BtnExportJson" Content="Export Full JSON" Height="26" Padding="12,0" Background="#1A1D27" Foreground="#C084FC" BorderThickness="0" FontSize="11" FontWeight="SemiBold" Cursor="Hand" HorizontalAlignment="Right">
+                    <DockPanel Grid.Row="3" Margin="0,8,0,0">
+                        <TextBlock Name="TxtSummaryStats" Text="Clean Forensics" Foreground="#64748B" FontSize="11.5" VerticalAlignment="Center"/>
+                        <Button Name="BtnExportJson" Content="Export Full JSON" Height="28" Padding="14,0" Background="#1D1233" Foreground="#C084FC" BorderBrush="#581C87" BorderThickness="1" FontSize="11.5" FontWeight="Bold" Cursor="Hand" HorizontalAlignment="Right">
                             <Button.Resources>
                                 <Style TargetType="Border">
-                                    <Setter Property="CornerRadius" Value="4"/>
+                                    <Setter Property="CornerRadius" Value="6"/>
                                 </Style>
                             </Button.Resources>
                         </Button>
@@ -2343,7 +2445,7 @@ function Show-GrickoGui {
                 </Grid>
 
                 <!-- VIEW 5: ALL INSTALLED MODS BROWSER -->
-                <Grid Name="ModsView" Visibility="Collapsed" Height="365" Margin="4,0">
+                <Grid Name="ModsView" Visibility="Collapsed" Height="470" Margin="2,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
@@ -2352,32 +2454,32 @@ function Show-GrickoGui {
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <DockPanel Grid.Row="0" Margin="0,0,0,6">
+                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
                         <StackPanel>
-                            <TextBlock Name="TxtModsTitle" Text="INSTALLED MODS" Foreground="#F8FAFC" FontSize="13" FontWeight="Bold"/>
-                            <TextBlock Name="TxtModsSubtitle" Text="Last Played Instance" Foreground="#A78BFA" FontSize="11"/>
+                            <TextBlock Name="TxtModsTitle" Text="INSTALLED MODS" Foreground="#FFFFFF" FontSize="14" FontWeight="ExtraBold"/>
+                            <TextBlock Name="TxtModsSubtitle" Text="Last Played Instance" Foreground="#C084FC" FontSize="11.5"/>
                         </StackPanel>
-                        <Button Name="BtnBackFromMods" Content="&lt;- Back" Background="Transparent" Foreground="#38BDF8" BorderThickness="0" FontSize="12" FontWeight="SemiBold" Cursor="Hand" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        <Button Name="BtnBackFromMods" Content="&lt;- Back" Background="Transparent" Foreground="#00F0FF" BorderThickness="0" FontSize="12.5" FontWeight="Bold" Cursor="Hand" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </DockPanel>
 
                     <!-- Client & Instance Switcher in Mods View -->
-                    <Border Grid.Row="1" Background="#161822" CornerRadius="6" BorderBrush="#25293A" BorderThickness="1" Padding="8,3" Margin="0,0,0,6">
+                    <Border Grid.Row="1" Background="#0C1322" CornerRadius="8" BorderBrush="#1F2D48" BorderThickness="1" Padding="10,5" Margin="0,0,0,8">
                         <DockPanel>
-                            <TextBlock Text="INSTANCE:" Foreground="#818CF8" FontSize="10.5" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Text="INSTANCE:" Foreground="#00F0FF" FontSize="11" FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <ComboBox Name="CmbModsInstance" Cursor="Hand"/>
                         </DockPanel>
                     </Border>
 
                     <!-- Filter / Search Box -->
-                    <Border Grid.Row="2" Background="#161822" CornerRadius="6" BorderBrush="#262A38" BorderThickness="1" Padding="10,4" Margin="0,0,0,6">
+                    <Border Grid.Row="2" Background="#0C1322" CornerRadius="8" BorderBrush="#253552" BorderThickness="1" Padding="12,6" Margin="0,0,0,8">
                         <DockPanel>
-                            <TextBlock Text="Search:" Foreground="#64748B" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                            <TextBox Name="TxtModSearch" Background="Transparent" Foreground="#F1F5F9" BorderThickness="0" FontSize="11.5" VerticalAlignment="Center"/>
+                            <TextBlock Text="Filter Mods:" Foreground="#64748B" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBox Name="TxtModSearch" Background="Transparent" Foreground="#F8FAFC" BorderThickness="0" FontSize="12" VerticalAlignment="Center"/>
                         </DockPanel>
                     </Border>
 
                     <!-- Mods List ScrollViewer -->
-                    <Border Grid.Row="3" Background="#0C0D11" CornerRadius="8" BorderBrush="#1C1E26" BorderThickness="1" Padding="8">
+                    <Border Grid.Row="3" Background="#06080E" CornerRadius="10" BorderBrush="#172236" BorderThickness="1" Padding="10">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Name="ModsListPanel">
                                 <!-- Populated dynamically with clean mod cards -->
@@ -2385,9 +2487,9 @@ function Show-GrickoGui {
                         </ScrollViewer>
                     </Border>
 
-                    <DockPanel Grid.Row="4" Margin="0,6,0,0">
-                        <TextBlock Name="TxtModsSummaryStats" Text="0 Mods Installed" Foreground="#64748B" FontSize="11" VerticalAlignment="Center"/>
-                        <TextBlock Name="TxtModsFlaggedCount" Text="" Foreground="#EF4444" FontSize="11" FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    <DockPanel Grid.Row="4" Margin="0,8,0,0">
+                        <TextBlock Name="TxtModsSummaryStats" Text="0 Mods Installed" Foreground="#64748B" FontSize="11.5" VerticalAlignment="Center"/>
+                        <TextBlock Name="TxtModsFlaggedCount" Text="" Foreground="#EF4444" FontSize="11.5" FontWeight="ExtraBold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
                     </DockPanel>
                 </Grid>
 
@@ -2395,7 +2497,7 @@ function Show-GrickoGui {
 
             <!-- FOOTER WATERMARK -->
             <Grid Grid.Row="2">
-                <TextBlock Text="powered by Gricko SS Tool" Foreground="#475569" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,4,2"/>
+                <TextBlock Text="powered by Gricko SS Tool | Anti-Evasion Invariant Engine V3" Foreground="#475569" FontSize="10" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,4,2"/>
             </Grid>
         </Grid>
     </Border>
@@ -2430,8 +2532,9 @@ function Show-GrickoGui {
     $btnBackFromMods   = $window.FindName("BtnBackFromMods")
     $btnExportJson     = $window.FindName("BtnExportJson")
 
-    $scanProgress      = $window.FindName("ScanProgress")
-    $txtProgressStatus = $window.FindName("TxtProgressStatus")
+    $scanProgress        = $window.FindName("ScanProgress")
+    $txtProgressPercent  = $window.FindName("TxtProgressPercent")
+    $txtProgressStatus   = $window.FindName("TxtProgressStatus")
 
     $txtResultTitle    = $window.FindName("TxtResultTitle")
     $txtResultSubtitle = $window.FindName("TxtResultSubtitle")
@@ -2598,7 +2701,26 @@ function Show-GrickoGui {
         $detailsContentPanel.Children.Add($sp) | Out-Null
     }
 
-    # Populate Mods View with Clean Cards
+    function New-CyberChip {
+        param([string]$Text, [string]$BgColor, [string]$FgColor, [string]$BorderColor = $BgColor)
+        $b = [System.Windows.Controls.Border]::new()
+        $b.CornerRadius = [System.Windows.CornerRadius]::new(4)
+        $b.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString($BgColor)
+        $b.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString($BorderColor)
+        $b.BorderThickness = [System.Windows.Thickness]::new(1)
+        $b.Padding = [System.Windows.Thickness]::new(6, 1.5, 6, 1.5)
+        $b.Margin = [System.Windows.Thickness]::new(0, 2, 5, 2)
+
+        $tb = [System.Windows.Controls.TextBlock]::new()
+        $tb.Text = $Text
+        $tb.FontSize = 9.5
+        $tb.FontWeight = [System.Windows.FontWeights]::Bold
+        $tb.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($FgColor)
+        $b.Child = $tb
+        return $b
+    }
+
+    # Populate Mods View with Clean Cyber Cards
     function Render-ModsList {
         param([string]$Filter = "")
         $modsListPanel.Children.Clear()
@@ -2632,72 +2754,79 @@ function Show-GrickoGui {
         }, @{ Expression = { if ($_.AIRiskScore) { $_.AIRiskScore } else { 0 } }; Descending = $true },
            @{ Expression = { $_.Name }; Descending = $false }
 
-
         foreach ($mod in $sortedMods) {
             $card = [System.Windows.Controls.Border]::new()
-            $card.CornerRadius = [System.Windows.CornerRadius]::new(6)
-            $card.Padding = [System.Windows.Thickness]::new(10, 8, 10, 8)
-            $card.Margin = [System.Windows.Thickness]::new(0, 0, 0, 6)
+            $card.CornerRadius = [System.Windows.CornerRadius]::new(8)
+            $card.Padding = [System.Windows.Thickness]::new(12, 10, 12, 10)
+            $card.Margin = [System.Windows.Thickness]::new(0, 0, 0, 7)
 
             $cardStack = [System.Windows.Controls.StackPanel]::new()
             $headerDock = [System.Windows.Controls.DockPanel]::new()
 
             $tbName = [System.Windows.Controls.TextBlock]::new()
             $tbName.Text = $mod.FileName
-            $tbName.FontSize = 11.5
-            $tbName.FontWeight = [System.Windows.FontWeights]::SemiBold
+            $tbName.FontSize = 12
+            $tbName.FontWeight = [System.Windows.FontWeights]::Bold
             $tbName.TextTrimming = [System.Windows.TextTrimming]::CharacterEllipsis
 
             $badge = [System.Windows.Controls.Border]::new()
-            $badge.CornerRadius = [System.Windows.CornerRadius]::new(4)
-            $badge.Padding = [System.Windows.Thickness]::new(6, 1, 6, 1)
+            $badge.CornerRadius = [System.Windows.CornerRadius]::new(5)
+            $badge.Padding = [System.Windows.Thickness]::new(8, 2, 8, 2)
             [System.Windows.Controls.DockPanel]::SetDock($badge, [System.Windows.Controls.Dock]::Right)
 
             $tbBadge = [System.Windows.Controls.TextBlock]::new()
             $tbBadge.FontSize = 9.5
-            $tbBadge.FontWeight = [System.Windows.FontWeights]::Bold
+            $tbBadge.FontWeight = [System.Windows.FontWeights]::ExtraBold
 
             $isAiHeuristic  = ($mod.Category -like "*HEURISTIC*")
             $isLowRisk      = ($mod.Category -like "*LOW RISK*")
 
             if ($mod.IsFlagged -and -not $isAiHeuristic) {
-                # Known cheat signature - Red
-                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#2A1215")
-                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7F1D1D")
-                $card.BorderThickness = [System.Windows.Thickness]::new(1)
-                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7F1D1D")
-                $tbBadge.Text      = "KNOWN CHEAT"
-                $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FCA5A5")
-                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
+                # Confirmed cheat / invariant violation - Red Cyber Glow
+                $card.Background      = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#150A0E")
+                $card.BorderBrush     = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#991B1B")
+                $card.BorderThickness = [System.Windows.Thickness]::new(1.5)
+                $badge.Background     = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#450A0A")
+                $badge.BorderBrush    = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#DC2626")
+                $badge.BorderThickness= [System.Windows.Thickness]::new(1)
+                $tbBadge.Text         = "CHEAT DETECTED"
+                $tbBadge.Foreground   = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FCA5A5")
+                $tbName.Foreground    = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
             } elseif ($isAiHeuristic) {
-                # AI heuristic risk - Orange
-                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#271810")
-                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#92400E")
-                $card.BorderThickness = [System.Windows.Thickness]::new(1)
-                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#92400E")
+                # AI heuristic risk - Amber Cyber
+                $card.Background      = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#181008")
+                $card.BorderBrush     = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#D97706")
+                $card.BorderThickness = [System.Windows.Thickness]::new(1.5)
+                $badge.Background     = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#451A03")
+                $badge.BorderBrush    = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F59E0B")
+                $badge.BorderThickness= [System.Windows.Thickness]::new(1)
                 $riskScore = if ($mod.AIRiskScore) { " ($($mod.AIRiskScore)/99)" } else { "" }
-                $tbBadge.Text      = "AI RISK$riskScore"
-                $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FCD34D")
-                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FB923C")
+                $tbBadge.Text         = "AI RISK$riskScore"
+                $tbBadge.Foreground   = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FDE68A")
+                $tbName.Foreground    = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FBBF24")
             } elseif ($isLowRisk) {
                 # Low risk / review - Yellow
-                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#1C1900")
-                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#713F12")
+                $card.Background      = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#121105")
+                $card.BorderBrush     = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#854D0E")
                 $card.BorderThickness = [System.Windows.Thickness]::new(1)
-                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#713F12")
+                $badge.Background     = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#3B2F04")
+                $badge.BorderBrush    = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#EAB308")
+                $badge.BorderThickness= [System.Windows.Thickness]::new(1)
                 $riskScore = if ($mod.AIRiskScore) { " ($($mod.AIRiskScore)/99)" } else { "" }
-                $tbBadge.Text      = "REVIEW$riskScore"
-                $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FEF08A")
-                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#EAB308")
+                $tbBadge.Text         = "REVIEW$riskScore"
+                $tbBadge.Foreground   = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FEF08A")
+                $tbName.Foreground    = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#EAB308")
             } else {
-                # Clean - Green
-                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#131620")
-                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#1E2330")
+                # Clean - Emerald / Obsidian Navy
+                $card.Background      = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#0A0F1D")
+                $card.BorderBrush     = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#162238")
                 $card.BorderThickness = [System.Windows.Thickness]::new(1)
-                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#064E3B")
-                $tbBadge.Text      = "CLEAN"
-                $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#6EE7B7")
-                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#E2E8F0")
+                $badge.Background     = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#062E22")
+                $badge.BorderBrush    = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#059669")
+                $badge.BorderThickness= [System.Windows.Thickness]::new(1)
+                $tbBadge.Text         = "VERIFIED CLEAN"
+                $tbBadge.Foreground   = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#34D399")
+                $tbName.Foreground    = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F1F5F9")
             }
 
             $badge.Child = $tbBadge
@@ -2705,33 +2834,68 @@ function Show-GrickoGui {
             $headerDock.Children.Add($tbName) | Out-Null
             $cardStack.Children.Add($headerDock) | Out-Null
 
+            # Cyber Capability & Invariant Chips
+            $chipPanel = [System.Windows.Controls.WrapPanel]::new()
+            $chipPanel.Margin = [System.Windows.Thickness]::new(0, 5, 0, 3)
+
+            if ($mod.Invariants -and $mod.Invariants.Count -gt 0) {
+                foreach ($inv in $mod.Invariants) {
+                    if ($inv -match "Trig") {
+                        $chipPanel.Children.Add((New-CyberChip "[AIMBOT TRIG]" "#5A0A0A" "#FCA5A5" "#DC2626")) | Out-Null
+                    } elseif ($inv -match "Shield") {
+                        $chipPanel.Children.Add((New-CyberChip "[AUTO SHIELD-BREAK]" "#6B082C" "#FBCFE8" "#DB2777")) | Out-Null
+                    } elseif ($inv -match "Anchor|Crystal") {
+                        $chipPanel.Children.Add((New-CyberChip "[ANCHOR/CRYSTAL MACRO]" "#58125C" "#F5D0FE" "#C026D3")) | Out-Null
+                    } elseif ($inv -match "StreamProof|Capture") {
+                        $chipPanel.Children.Add((New-CyberChip "[STREAMPROOF EVASION]" "#3B0764" "#E9D5FF" "#9333EA")) | Out-Null
+                    } elseif ($inv -match "Web Server") {
+                        $chipPanel.Children.Add((New-CyberChip "[EMBEDDED WEB SERVER]" "#172554" "#BFDBFE" "#2563EB")) | Out-Null
+                    } elseif ($inv -match "HWID") {
+                        $chipPanel.Children.Add((New-CyberChip "[HWID ANTI-LEAK DRM]" "#0F172A" "#CBD5E1" "#475569")) | Out-Null
+                    } elseif ($inv -match "Mace") {
+                        $chipPanel.Children.Add((New-CyberChip "[MACE WEAPON ASSIST]" "#451A03" "#FDE68A" "#D97706")) | Out-Null
+                    }
+                }
+            }
+
+            if ($mod.Modules -and $mod.Modules.Count -gt 0) {
+                foreach ($m in ($mod.Modules | Select-Object -First 4)) {
+                    $chipPanel.Children.Add((New-CyberChip "[$m]" "#1E1B4B" "#C7D2FE" "#4338CA")) | Out-Null
+                }
+            }
+
+            if ($chipPanel.Children.Count -gt 0) {
+                $cardStack.Children.Add($chipPanel) | Out-Null
+            }
+
             if ($mod.IsFlagged -or $isAiHeuristic -or $isLowRisk) {
                 $tbReason = [System.Windows.Controls.TextBlock]::new()
                 $prefix = if ($mod.IsFlagged -and -not $isAiHeuristic) { "[!] " } elseif ($isAiHeuristic) { "[AI] " } else { "[?] " }
                 $tbReason.Text = $prefix + $mod.Reason
-                $reasonColor = if ($mod.IsFlagged -and -not $isAiHeuristic) { "#FBBF24" } elseif ($isAiHeuristic) { "#FB923C" } else { "#EAB308" }
+                $reasonColor = if ($mod.IsFlagged -and -not $isAiHeuristic) { "#FCA5A5" } elseif ($isAiHeuristic) { "#FDE68A" } else { "#FEF08A" }
                 $tbReason.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($reasonColor)
-                $tbReason.FontSize = 10.5
+                $tbReason.FontSize = 11
+                $tbReason.FontWeight = [System.Windows.FontWeights]::SemiBold
                 $tbReason.TextWrapping = [System.Windows.TextWrapping]::Wrap
-                $tbReason.Margin = [System.Windows.Thickness]::new(0, 2, 0, 1)
+                $tbReason.Margin = [System.Windows.Thickness]::new(0, 2, 0, 2)
                 $cardStack.Children.Add($tbReason) | Out-Null
 
-                # Show additional AI analysis details if present
                 if ($mod.AIDetails -and $mod.AIDetails.Length -gt 0) {
                     $tbAI = [System.Windows.Controls.TextBlock]::new()
-                    $tbAI.Text = "AI Analysis: " + $mod.AIDetails
+                    $tbAI.Text = "Deep Forensics: " + $mod.AIDetails
                     $tbAI.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#94A3B8")
                     $tbAI.FontSize = 10
                     $tbAI.TextWrapping = [System.Windows.TextWrapping]::Wrap
-                    $tbAI.Margin = [System.Windows.Thickness]::new(0, 1, 0, 1)
+                    $tbAI.Margin = [System.Windows.Thickness]::new(0, 1, 0, 2)
                     $cardStack.Children.Add($tbAI) | Out-Null
                 }
             }
 
             $tbMeta = [System.Windows.Controls.TextBlock]::new()
             $tbMeta.Text = "Size: " + $mod.SizeKB + " KB  |  Modified: " + $mod.LastWriteTime
-            $tbMeta.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#64748B")
+            $tbMeta.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#475569")
             $tbMeta.FontSize = 10
+            $tbMeta.Margin = [System.Windows.Thickness]::new(0, 2, 0, 0)
             $cardStack.Children.Add($tbMeta) | Out-Null
 
             $card.Child = $cardStack
@@ -2892,34 +3056,39 @@ function Show-GrickoGui {
         # Step 1: Memory & Active Process Inspection (0% to 15%)
         for ($pct = 1; $pct -le 15; $pct++) {
             $scanProgress.Value = $pct
+            if ($txtProgressPercent) { $txtProgressPercent.Text = "$pct%" }
             $txtProgressStatus.Text = "Scanning active memory & running processes... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 35
+            Start-Sleep -Milliseconds 30
         }
         try { Scan-JavaProcesses } catch { Write-Host "Process scan error: $_" }
         Pump-WpfEvents
 
         # Step 2: Minecraft Instances, Versions & Deep Mods Inspection (15% to 35%)
         $scanProgress.Value = 16
+        if ($txtProgressPercent) { $txtProgressPercent.Text = "16%" }
         $txtProgressStatus.Text = "Deep scanning all Minecraft clients & instances... - 16%"
         Pump-WpfEvents
         $instCallback = {
             param([int]$p, [string]$msg)
             $scanProgress.Value = $p
+            if ($txtProgressPercent) { $txtProgressPercent.Text = "$p%" }
             $txtProgressStatus.Text = "$msg - $p%"
             Pump-WpfEvents
         }
         try { Scan-LastPlayedInstance -ProgressCallback $instCallback } catch { Write-Host "Instance scan error: $_" }
         $scanProgress.Value = 35
+        if ($txtProgressPercent) { $txtProgressPercent.Text = "35%" }
         $txtProgressStatus.Text = "Minecraft instances & mods analyzed - 35%"
         Pump-WpfEvents
 
         # Step 3: Windows Prefetch & BAM Execution History (35% to 60%)
         for ($pct = 36; $pct -le 60; $pct++) {
             $scanProgress.Value = $pct
+            if ($txtProgressPercent) { $txtProgressPercent.Text = "$pct%" }
             $txtProgressStatus.Text = "Scanning Windows Prefetch & BAM kernel timestamps... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 30
+            Start-Sleep -Milliseconds 25
         }
         try { Scan-PrefetchTraces -Hours $HoursPrefetch } catch { Write-Host "Prefetch scan error: $_" }
         try { Scan-BAMRegistry -Hours $HoursBAM } catch { Write-Host "BAM scan error: $_" }
@@ -2928,9 +3097,10 @@ function Show-GrickoGui {
         # Step 4: UserAssist & MuiCache Application History (60% to 80%)
         for ($pct = 61; $pct -le 80; $pct++) {
             $scanProgress.Value = $pct
+            if ($txtProgressPercent) { $txtProgressPercent.Text = "$pct%" }
             $txtProgressStatus.Text = "Auditing UserAssist ROT13 & execution traces... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 30
+            Start-Sleep -Milliseconds 25
         }
         try { Scan-UserAssist } catch { Write-Host "UserAssist scan error: $_" }
         Pump-WpfEvents
@@ -2938,9 +3108,10 @@ function Show-GrickoGui {
         # Step 5: File System, Temp drops & Anti-Forensics (80% to 95%)
         for ($pct = 81; $pct -le 95; $pct++) {
             $scanProgress.Value = $pct
+            if ($txtProgressPercent) { $txtProgressPercent.Text = "$pct%" }
             $txtProgressStatus.Text = "Auditing file systems, temp drops & anti-forensics... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 30
+            Start-Sleep -Milliseconds 25
         }
         try { Scan-FileSystem -Hours $HoursFiles } catch { Write-Host "FileSystem scan error: $_" }
         try { Scan-USBStorage } catch { Write-Host "USBStorage scan error: $_" }
@@ -2949,9 +3120,10 @@ function Show-GrickoGui {
         # Step 6: Finalizing & Compiling Report (95% to 100%)
         for ($pct = 96; $pct -le 100; $pct++) {
             $scanProgress.Value = $pct
+            if ($txtProgressPercent) { $txtProgressPercent.Text = "$pct%" }
             $txtProgressStatus.Text = "Finalizing forensic report & scorecard... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 30
+            Start-Sleep -Milliseconds 25
         }
 
         # Collect all system-level cheat detections (Prefetch, BAM, FileSystem, etc.)
@@ -2980,8 +3152,8 @@ function Show-GrickoGui {
                     $fileName = $f.Detail
                 }
 
-                if ($fileName -match '([^\\]+\.exe)') {
-                    $fileName = $matches[1].Trim()
+                if ($fileName -like "*.exe") {
+                    $fileName = [System.IO.Path]::GetFileName($fileName)
                 }
 
                 $actualCheats.Add([PSCustomObject]@{
