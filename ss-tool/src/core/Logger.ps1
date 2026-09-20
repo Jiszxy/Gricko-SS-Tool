@@ -1,5 +1,10 @@
+<#
+    Gricko SS Tool - Terminal UI, Colors & Logging Engine
+    Theme: Purple & Blue (Ocean Inspired)
+#>
+
 function Write-PurpleBorder {
-    param([string]$Text = '')
+    param([string]$Text = "")
     if ($NoColor) {
         Write-Host "================================================================================"
         if ($Text) { Write-Host "  $Text" }
@@ -31,24 +36,24 @@ function Write-SectionHeader {
 function Write-Alert {
     param(
         [Parameter(Mandatory=$true)]
-        [ValidateSet('OK', 'INFO', 'WARN', 'FLAG')]
+        [ValidateSet("OK", "INFO", "WARN", "FLAG")]
         [string]$Level,
 
         [Parameter(Mandatory=$true)]
         [string]$Message,
 
-        [string]$Detail = ''
+        [string]$Detail = ""
     )
 
-    $timestamp = (Get-Date).ToString('HH:mm:ss')
+    $timestamp = (Get-Date).ToString("HH:mm:ss")
     $tag = "[$Level]"
-    $color = 'White'
+    $color = "White"
 
     switch ($Level) {
-        'OK'   { $color = 'Green';   $Global:ReportData.Scorecard.Clean++ }
-        'INFO' { $color = 'Cyan';    $Global:ReportData.Scorecard.Info++ }
-        'WARN' { $color = 'Yellow';  $Global:ReportData.Scorecard.Warnings++ }
-        'FLAG' { $color = 'Red';     $Global:ReportData.Scorecard.Flags++ }
+        "OK"   { $color = "Green";   $Global:ReportData.Scorecard.Clean++ }
+        "INFO" { $color = "Cyan";    $Global:ReportData.Scorecard.Info++ }
+        "WARN" { $color = "Yellow";  $Global:ReportData.Scorecard.Warnings++ }
+        "FLAG" { $color = "Red";     $Global:ReportData.Scorecard.Flags++ }
     }
 
     $entry = [PSCustomObject]@{
@@ -91,6 +96,7 @@ function Update-ScanStatus {
     }
 }
 
+
 function Show-Banner {
     if (-not $NoColor) {
         Write-Host ""
@@ -106,6 +112,6 @@ function Show-Banner {
         Write-Host " ==============================================================================" -ForegroundColor Magenta
         Write-Host ""
     } else {
-        Write-Host "`n=== GRICKO SS TOOL v$($Global:ToolVersion) ===`n"
+        Write-Host "`n=== GRICKO SS TOOL (Minecraft Forensic Scanner v$($Global:ToolVersion)) ===`n"
     }
 }

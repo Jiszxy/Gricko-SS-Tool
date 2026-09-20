@@ -561,7 +561,7 @@ function Show-GrickoGui {
             $isLowRisk      = ($mod.Category -like "*LOW RISK*")
 
             if ($mod.IsFlagged -and -not $isAiHeuristic) {
-                # Known cheat signature — Red
+                # Known cheat signature - Red
                 $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#2A1215")
                 $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7F1D1D")
                 $card.BorderThickness = [System.Windows.Thickness]::new(1)
@@ -570,7 +570,7 @@ function Show-GrickoGui {
                 $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FCA5A5")
                 $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
             } elseif ($isAiHeuristic) {
-                # AI heuristic risk — Orange
+                # AI heuristic risk - Orange
                 $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#271810")
                 $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#92400E")
                 $card.BorderThickness = [System.Windows.Thickness]::new(1)
@@ -580,7 +580,7 @@ function Show-GrickoGui {
                 $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FCD34D")
                 $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FB923C")
             } elseif ($isLowRisk) {
-                # Low risk / review — Yellow
+                # Low risk / review - Yellow
                 $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#1C1900")
                 $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#713F12")
                 $card.BorderThickness = [System.Windows.Thickness]::new(1)
@@ -590,7 +590,7 @@ function Show-GrickoGui {
                 $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FEF08A")
                 $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#EAB308")
             } else {
-                # Clean — Green
+                # Clean - Green
                 $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#131620")
                 $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#1E2330")
                 $card.BorderThickness = [System.Windows.Thickness]::new(1)
@@ -773,7 +773,8 @@ function Show-GrickoGui {
         $detailsContentPanel.Children.Clear()
         $modsListPanel.Children.Clear()
 
-        # Reset state
+        try {
+            # Reset state
         $Global:ReportData.Scorecard.Flags = 0
         $Global:ReportData.Scorecard.Warnings = 0
         $Global:ReportData.Scorecard.Clean = 0
@@ -783,63 +784,69 @@ function Show-GrickoGui {
         $Global:ReportData.ActiveInstanceMods = @()
         $Global:ReportData.AllInstances = @()
 
-        # Step 1: Memory & Active Process Inspection (0% to 15% - ~18s)
+        # Step 1: Memory & Active Process Inspection (0% to 15%)
         for ($pct = 1; $pct -le 15; $pct++) {
             $scanProgress.Value = $pct
             $txtProgressStatus.Text = "Scanning active memory & running processes... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 1200
+            Start-Sleep -Milliseconds 35
         }
-        Scan-JavaProcesses
+        try { Scan-JavaProcesses } catch { Write-Host "Process scan error: $_" }
         Pump-WpfEvents
 
-        # Step 2: Minecraft Instances, Versions & Deep Mods Inspection (15% to 35% - ~24s)
-        Scan-LastPlayedInstance
-        for ($pct = 16; $pct -le 35; $pct++) {
-            $scanProgress.Value = $pct
-            $txtProgressStatus.Text = "Deep scanning all Minecraft clients & instances... - $pct%"
+        # Step 2: Minecraft Instances, Versions & Deep Mods Inspection (15% to 35%)
+        $scanProgress.Value = 16
+        $txtProgressStatus.Text = "Deep scanning all Minecraft clients & instances... - 16%"
+        Pump-WpfEvents
+        $instCallback = {
+            param([int]$p, [string]$msg)
+            $scanProgress.Value = $p
+            $txtProgressStatus.Text = "$msg - $p%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 1200
         }
+        try { Scan-LastPlayedInstance -ProgressCallback $instCallback } catch { Write-Host "Instance scan error: $_" }
+        $scanProgress.Value = 35
+        $txtProgressStatus.Text = "Minecraft instances & mods analyzed - 35%"
+        Pump-WpfEvents
 
-        # Step 3: Windows Prefetch & BAM Execution History (35% to 60% - ~30s)
+        # Step 3: Windows Prefetch & BAM Execution History (35% to 60%)
         for ($pct = 36; $pct -le 60; $pct++) {
             $scanProgress.Value = $pct
             $txtProgressStatus.Text = "Scanning Windows Prefetch & BAM kernel timestamps... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 1200
+            Start-Sleep -Milliseconds 30
         }
-        Scan-PrefetchTraces -Hours $HoursPrefetch
-        Scan-BAMRegistry -Hours $HoursBAM
+        try { Scan-PrefetchTraces -Hours $HoursPrefetch } catch { Write-Host "Prefetch scan error: $_" }
+        try { Scan-BAMRegistry -Hours $HoursBAM } catch { Write-Host "BAM scan error: $_" }
         Pump-WpfEvents
 
-        # Step 4: UserAssist & MuiCache Application History (60% to 80% - ~24s)
+        # Step 4: UserAssist & MuiCache Application History (60% to 80%)
         for ($pct = 61; $pct -le 80; $pct++) {
             $scanProgress.Value = $pct
             $txtProgressStatus.Text = "Auditing UserAssist ROT13 & execution traces... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 1200
+            Start-Sleep -Milliseconds 30
         }
-        Scan-UserAssist
+        try { Scan-UserAssist } catch { Write-Host "UserAssist scan error: $_" }
         Pump-WpfEvents
 
-        # Step 5: File System, Temp drops & Anti-Forensics (80% to 95% - ~18s)
+        # Step 5: File System, Temp drops & Anti-Forensics (80% to 95%)
         for ($pct = 81; $pct -le 95; $pct++) {
             $scanProgress.Value = $pct
             $txtProgressStatus.Text = "Auditing file systems, temp drops & anti-forensics... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 1200
+            Start-Sleep -Milliseconds 30
         }
-        Scan-FileSystem -Hours $HoursFiles
-        Scan-USBStorage
+        try { Scan-FileSystem -Hours $HoursFiles } catch { Write-Host "FileSystem scan error: $_" }
+        try { Scan-USBStorage } catch { Write-Host "USBStorage scan error: $_" }
         Pump-WpfEvents
 
-        # Step 6: Finalizing & Compiling Report (95% to 100% - ~6s)
+        # Step 6: Finalizing & Compiling Report (95% to 100%)
         for ($pct = 96; $pct -le 100; $pct++) {
             $scanProgress.Value = $pct
             $txtProgressStatus.Text = "Finalizing forensic report & scorecard... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 1200
+            Start-Sleep -Milliseconds 30
         }
 
         # Collect all system-level cheat detections (Prefetch, BAM, FileSystem, etc.)
@@ -957,11 +964,17 @@ function Show-GrickoGui {
         }
 
         $txtSummaryStats.Text = "$($actualCheats.Count) Cheats Flagged | $($allInst.Count) Clients/Instances Discovered"
-
-        # Show Results View
-        $progressView.Visibility = [System.Windows.Visibility]::Collapsed
-        $resultsView.Visibility = [System.Windows.Visibility]::Visible
-        Pump-WpfEvents
+        } catch {
+            Write-Host "Scan encountered an error: $_" -ForegroundColor Red
+            if ($Global:Findings.Count -eq 0) {
+                Write-Alert -Level "WARN" -Message "Scan encountered an exception: $($_.Exception.Message)"
+            }
+        } finally {
+            # Show Results View
+            $progressView.Visibility = [System.Windows.Visibility]::Collapsed
+            $resultsView.Visibility = [System.Windows.Visibility]::Visible
+            Pump-WpfEvents
+        }
     })
 
     # Export JSON Handler

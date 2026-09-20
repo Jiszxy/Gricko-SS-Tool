@@ -133,6 +133,9 @@ function Scan-FileSystem {
                 LastWriteTime = $dl.LastWriteTime.ToString("o")
                 Flagged       = $isSus
             }
+            if (-not $Global:ReportData.DownloadFiles) {
+                $Global:ReportData['DownloadFiles'] = @()
+            }
             $Global:ReportData.DownloadFiles += $entry
 
             if ($isSus) {

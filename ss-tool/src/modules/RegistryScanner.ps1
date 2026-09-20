@@ -1,6 +1,10 @@
+<#
+    Gricko SS Tool - BAM/DAM Kernel Timestamps & UserAssist ROT13 Registry Scanner
+#>
+
 function Convert-Rot13 {
     param([string]$InputText)
-    if ([string]::IsNullOrEmpty($InputText)) { return '' }
+    if ([string]::IsNullOrEmpty($InputText)) { return "" }
     $chars = $InputText.ToCharArray()
     for ($i = 0; $i -lt $chars.Length; $i++) {
         $c = [int]$chars[$i]
@@ -18,9 +22,9 @@ function Scan-BAMRegistry {
     Write-SectionHeader "EXECUTION TRACES: BAM / DAM REGISTRY (PAST $Hours HOURS)"
 
     $bamBases = @(
-        'HKLM:\SYSTEM\CurrentControlSet\Services\bam\State\UserSettings',
-        'HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings',
-        'HKLM:\SYSTEM\CurrentControlSet\Services\dam\UserSettings'
+        "HKLM:\SYSTEM\CurrentControlSet\Services\bam\State\UserSettings",
+        "HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings",
+        "HKLM:\SYSTEM\CurrentControlSet\Services\dam\UserSettings"
     )
 
     $bamRoot = $null
@@ -32,7 +36,7 @@ function Scan-BAMRegistry {
     }
 
     if (-not $bamRoot) {
-        Write-Alert -Level 'WARN' -Message 'BAM/DAM registry path not accessible.' -Detail 'Requires Administrator elevation.'
+        Write-Alert -Level "WARN" -Message "BAM/DAM registry path not accessible." -Detail "Requires Administrator elevation."
         return
     }
 
@@ -43,12 +47,13 @@ function Scan-BAMRegistry {
 
     foreach ($key in $subKeys) {
         $sid = $key.PSChildName
-        $prop = Get-ItemProperty -Path $key.PSPath -ErrorAction SilentlyContinue
+        $prop = Get-ItemProperty -Path $key.PSPath
 
         foreach ($p in $prop.PSObject.Properties) {
-            if ($p.Name -like '*\*' -and $p.Value -is [byte[]]) {
+            if ($p.Name -like "*\*" -and $p.Value -is [byte[]]) {
                 $rawPath = $p.Name
                 $bytes = $p.Value
+
                 $execDate = $null
 
                 if ($bytes.Length -ge 8) {
@@ -78,7 +83,7 @@ function Scan-BAMRegistry {
                 if ($execDate -and $execDate -ge $timeCutoff) {
                     $totalFound++
                     $isMatch = $false
-                    $matchedSig = ''
+                    $matchedSig = ""
 
                     foreach ($sig in $Global:SuspiciousSignatures) {
                         if ($rawPath -match "(?i)$sig") {
@@ -91,7 +96,7 @@ function Scan-BAMRegistry {
                     $entry = [PSCustomObject]@{
                         SID            = $sid
                         BinaryPath     = $rawPath
-                        LastExecution  = $execDate.ToString('o')
+                        LastExecution  = $execDate.ToString("o")
                         SignatureMatch = $matchedSig
                         Flagged        = $isMatch
                     }
@@ -99,10 +104,10 @@ function Scan-BAMRegistry {
 
                     if ($isMatch) {
                         $flaggedCount++
-                        Write-Alert -Level 'FLAG' -Message 'BAM RECORD MATCHES CHEAT SIGNATURE!' -Detail "$rawPath (Executed: $($execDate.ToString('yyyy-MM-dd HH:mm:ss')))"
-                    } elseif ($rawPath -like '*\AppData\Local\Temp\*' -or $rawPath -like '*\Downloads\*') {
-                        if ($rawPath -like '*.exe' -or $rawPath -like '*.jar') {
-                            Write-Alert -Level 'WARN' -Message 'Executable run from Temp/Downloads recorded in BAM' -Detail "$rawPath ($($execDate.ToString('yyyy-MM-dd HH:mm:ss')))"
+                        Write-Alert -Level "FLAG" -Message "BAM RECORD MATCHES CHEAT SIGNATURE!" -Detail "$rawPath (Executed: $($execDate.ToString('yyyy-MM-dd HH:mm:ss')))"
+                    } elseif ($rawPath -like "*\AppData\Local\Temp\*" -or $rawPath -like "*\Downloads\*") {
+                        if ($rawPath -like "*.exe" -or $rawPath -like "*.jar") {
+                            Write-Alert -Level "WARN" -Message "Executable run from Temp/Downloads recorded in BAM" -Detail "$rawPath ($($execDate.ToString('yyyy-MM-dd HH:mm:ss')))"
                         }
                     }
                 }
@@ -111,33 +116,33 @@ function Scan-BAMRegistry {
     }
 
     if ($totalFound -gt 0) {
-        Write-Alert -Level 'INFO' -Message "Identified $totalFound recent execution events across user accounts via BAM."
+        Write-Alert -Level "INFO" -Message "Identified $totalFound recent execution events across user accounts via BAM."
     } else {
-        Write-Alert -Level 'INFO' -Message "No BAM entries found within the last $Hours hours."
+        Write-Alert -Level "INFO" -Message "No BAM entries found within the last $Hours hours."
     }
 
     if ($flaggedCount -eq 0) {
-        Write-Alert -Level 'OK' -Message 'No known cheat signatures detected in active BAM records.'
+        Write-Alert -Level "OK" -Message "No known cheat signatures detected in active BAM records."
     }
 }
 
 function Scan-UserAssist {
-    Write-SectionHeader 'EXECUTION TRACES: USERASSIST (ROT13 DECODED)'
+    Write-SectionHeader "EXECUTION TRACES: USERASSIST (ROT13 DECODED)"
 
-    $uaBasePath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist'
+    $uaBasePath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist"
     if (-not (Test-Path $uaBasePath)) {
-        Write-Alert -Level 'INFO' -Message 'UserAssist registry key not found.'
+        Write-Alert -Level "INFO" -Message "UserAssist registry key not found."
         return
     }
 
-    $guidKeys = Get-ChildItem -Path $uaBasePath -ErrorAction SilentlyContinue
+    $guidKeys = Get-ChildItem -Path $uaBasePath
     $totalFound = 0
     $flaggedCount = 0
 
     foreach ($gKey in $guidKeys) {
-        $countPath = Join-Path $gKey.PSPath 'Count'
+        $countPath = Join-Path $gKey.PSPath "Count"
         if (Test-Path $countPath) {
-            $props = (Get-ItemProperty -Path $countPath -ErrorAction SilentlyContinue).PSObject.Properties
+            $props = (Get-ItemProperty -Path $countPath).PSObject.Properties
             foreach ($p in $props) {
                 if ($p.Value -is [byte[]] -and $p.Value.Length -ge 68) {
                     $decodedName = Convert-Rot13 -InputText $p.Name
@@ -156,10 +161,10 @@ function Scan-UserAssist {
                         }
                     } catch {}
 
-                    if ($decodedName -like '*.exe' -or $decodedName -like '*.jar' -or $decodedName -like '*.lnk') {
+                    if ($decodedName -like "*.exe" -or $decodedName -like "*.jar" -or $decodedName -like "*.lnk") {
                         $totalFound++
                         $isMatch = $false
-                        $matchedSig = ''
+                        $matchedSig = ""
 
                         foreach ($sig in $Global:SuspiciousSignatures) {
                             if ($decodedName -match "(?i)$sig") {
@@ -170,18 +175,18 @@ function Scan-UserAssist {
                         }
 
                         $entry = [PSCustomObject]@{
-                            GUID           = $gKey.PSChildName
-                            DecodedPath    = $decodedName
-                            RunCount       = $runCount
-                            LastExecution  = if ($execDate) { $execDate.ToString('o') } else { 'N/A' }
-                            SignatureMatch = $matchedSig
-                            Flagged        = $isMatch
+                            GUID          = $gKey.PSChildName
+                            DecodedPath   = $decodedName
+                            RunCount      = $runCount
+                            LastExecution = if ($execDate) { $execDate.ToString("o") } else { "N/A" }
+                            SignatureMatch= $matchedSig
+                            Flagged       = $isMatch
                         }
                         $Global:ReportData.UserAssistTraces += $entry
 
                         if ($isMatch) {
                             $flaggedCount++
-                            Write-Alert -Level 'FLAG' -Message 'USERASSIST MATCH FOR KNOWN CHEAT SIGNATURE!' -Detail "$decodedName (Runs: $runCount | Last: $(if ($execDate){$execDate.ToString('yyyy-MM-dd HH:mm:ss')}else{'N/A'}))"
+                            Write-Alert -Level "FLAG" -Message "USERASSIST MATCH FOR KNOWN CHEAT SIGNATURE!" -Detail "$decodedName (Runs: $runCount | Last: $(if ($execDate){$execDate.ToString('yyyy-MM-dd HH:mm:ss')}else{'N/A'}))"
                         }
                     }
                 }
@@ -190,9 +195,9 @@ function Scan-UserAssist {
     }
 
     if ($totalFound -gt 0) {
-        Write-Alert -Level 'INFO' -Message "Decoded $totalFound application execution traces from UserAssist."
+        Write-Alert -Level "INFO" -Message "Decoded $totalFound application execution traces from UserAssist."
     }
     if ($flaggedCount -eq 0) {
-        Write-Alert -Level 'OK' -Message 'No known cheat signatures present in UserAssist history.'
+        Write-Alert -Level "OK" -Message "No known cheat signatures present in UserAssist history."
     }
 }

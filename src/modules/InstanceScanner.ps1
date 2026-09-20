@@ -94,6 +94,53 @@ function Analyze-InstanceMods {
     $uniqueJars = $modFiles | Sort-Object Name -Unique
     Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
 
+    if (-not $Global:ModAnalysisCache) {
+        $Global:ModAnalysisCache = @{}
+    }
+
+    # Pre-compiled high-performance regexes for instant multi-pattern evaluation
+    $cheatPkgs = @("wurstclient","meteordevelopment","vape","crystaloptimizer",
+                   "anchoroptimizer","autoclicker","raven/b","liquidbounce",
+                   "rusherhack","tenacity","novoline","rise/client","futureclient",
+                   "astolfo","sigma/client","salware","drip/loader","weavemc",
+                   "weave/loader","bape/client","lowkey/client","itami/client",
+                   "dreamclient","entropy/client","spectral/client","pluto/client",
+                   "us/kenny","us/kenny/mace","us/kenny/triggerbot","us/kenny/web",
+                   "maceassist","mace/assist","cpvp/client","cpvpclient",
+                   "lungemacro","lunge/macro","windchargeassist","windcharge/assist",
+                   "crystalaura","crystal/aura","autocrystal","auto/crystal")
+    $cheatPkgRegex = [regex]::new('(?i)(' + (($cheatPkgs | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+
+    $suspPats = @(
+        "RotationManager","AimAssist","AimBot","lookAt","snapTo","smoothAim",
+        "smoothRotate","rotateToEntity","rotateToPlayer","predictRotation",
+        "ReachCheck","ReachExtend","hitboxSize","attackRange","extendHitbox",
+        "setReach","hitboxExpand","reachDistance",
+        "EspModule","PlayerESP","StorageESP","TracerModule","drawBox","drawOutline",
+        "KillAura","MultiAura","TriggerBot","AutoClick","attackEntity",
+        "autoSwing","swingAura","autoAttack","attackAura","triggerAttack",
+        "FlightModule","SpeedModule","NoFall","StepModule","TimerModule",
+        "VelocityModule","AntiKnockback","NoVelocity","velocityMultiplier",
+        "InjectLoader","AgentLoader","premain","agentmain","retransformClasses",
+        "AntiScreen","DisableDebugger","AntiAC","BypassAC","checkIntegrity",
+        "streamProof","StreamProof","hideFromScreen","overlayWindow","invisibleOverlay",
+        "MaceAssistManager","MaceAssist","maceAssist","maceTrigger","MaceTrigger",
+        "LungeMacro","lungeMacro","maceAim","MaceAim","maceBoost","MaceBoost",
+        "TriggerbotManager","triggerbotManager","triggerBot","TriggerBot",
+        "PlayerEspManager","playerEspManager","StreamProofOverlayManager",
+        "WebConfigServer","webConfigServer","explodeMod","ExplodeMod",
+        "WindChargeAssist","windChargeAssist","maceSwing","autoMace","AutoMace",
+        "fallVelocityCheck","minFallDistance","aimAssistEnabled","cpvpModule",
+        "smartCrit","smartCrits","shieldBypass","ShieldBypass","autoAxeSwap",
+        "CrystalAura","crystalAura","AutoCrystal","autoCrystal","placeDelay",
+        "breakDelay","clickSimulation","autoGlowstone","autoRefillInventory",
+        "Allatori","Obfuscated by","Stringer","Zelix","DashO","JBCO","SkidFuscator"
+    )
+    $suspRegex = [regex]::new('(?i)\b(' + (($suspPats | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')\b', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+    $dangerRegex = [regex]::new('(?i)(java/lang/instrument/|sun/misc/Unsafe|java/lang/reflect/Proxy|com/sun/tools/attach/)', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+    $heurRegex = [regex]::new('(?i)\b(killaura|aimbot|triggerbot|reach|velocitymultiplier|antivelocity|novelocity|esp|wallhack|xray|bhop|fly|freecam|nofall|autoeat|scaffold|phase|step|jesus|wurst|meteor|vape|bleachhack|future|sigma|rusherhack|liquidbounce|autoclicker|crystaloptimizer|hack|cheat)\b', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+    $mixinHeurRegex = [regex]::new('(?i)(killaura|aimbot|autoclicker|reach|velocitymultiplier|antivelocity|esp|cheat|hack|antiac)', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+
     # AI Helper: Shannon entropy (randomness measure for obfuscation detection)
     function Measure-NameEntropy {
         param([string]$s)
@@ -105,21 +152,32 @@ function Analyze-InstanceMods {
         return [Math]::Round($ent, 3)
     }
 
-    # AI Helper: extract printable ASCII strings from raw binary bytes
-    function Get-BinaryStrings {
-        param([byte[]]$buf, [int]$readLen, [int]$minLen = 7)
-        $strings = [System.Collections.Generic.List[string]]::new()
-        $cur = [System.Text.StringBuilder]::new()
-        for ($i = 0; $i -lt $readLen; $i++) {
-            $b = $buf[$i]
-            if ($b -ge 32 -and $b -le 126) { $cur.Append([char]$b) | Out-Null }
-            else { if ($cur.Length -ge $minLen) { $strings.Add($cur.ToString()) }; $cur.Clear() | Out-Null }
-        }
-        if ($cur.Length -ge $minLen) { $strings.Add($cur.ToString()) }
-        return $strings
-    }
+    $readBuf  = [byte[]]::new(65536)
+    $smallBuf = [byte[]]::new(8192)
 
     foreach ($mod in $uniqueJars) {
+        if (Get-Command Pump-WpfEvents -ErrorAction SilentlyContinue) { Pump-WpfEvents }
+
+        $cacheKey = "$($mod.Name)|$($mod.Length)"
+        if ($Global:ModAnalysisCache.ContainsKey($cacheKey)) {
+            $cached = $Global:ModAnalysisCache[$cacheKey]
+            $cloned = [PSCustomObject]@{
+                Name          = $cached.Name
+                FileName      = $cached.FileName
+                FullPath      = $mod.FullName
+                SizeKB        = $cached.SizeKB
+                LastWriteTime = $mod.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+                IsFlagged     = $cached.IsFlagged
+                Category      = $cached.Category
+                Reason        = $cached.Reason
+                AIRiskScore   = $cached.AIRiskScore
+                AIDetails     = $cached.AIDetails
+            }
+            $result.Mods.Add($cloned)
+            if ($cloned.IsFlagged) { $result.FlaggedMods.Add($cloned); $result.FlaggedCount++ }
+            continue
+        }
+
         $isFlagged    = $false
         $reason       = "Clean"
         $category     = "CLEAN"
@@ -127,7 +185,7 @@ function Analyze-InstanceMods {
         $aiDetails    = [System.Collections.Generic.List[string]]::new()
         $displayName  = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
 
-        # ── LAYER 1: Filename signature matching ──────────────────────────────
+        # -- LAYER 1: Filename signature matching ------------------------------
         foreach ($sig in $Global:CheatSignatures) {
             if ($mod.Name -match "(?i)$sig") {
                 $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
@@ -140,7 +198,26 @@ function Analyze-InstanceMods {
                 $zip        = [System.IO.Compression.ZipFile]::OpenRead($mod.FullName)
                 $allEntries = @($zip.Entries)
 
-                # ── LAYER 2: Mod metadata inspection ─────────────────────────────
+                # Single-pass fast classification of all entries (avoids slow PowerShell pipelines)
+                $classEntries  = [System.Collections.Generic.List[System.IO.Compression.ZipArchiveEntry]]::new()
+                $classNames    = [System.Collections.Generic.List[string]]::new()
+                $mixinEntries  = [System.Collections.Generic.List[System.IO.Compression.ZipArchiveEntry]]::new()
+                $resourceCount = 0
+
+                foreach ($entry in $allEntries) {
+                    $fn = $entry.FullName
+                    if ($fn.EndsWith(".class", [System.StringComparison]::OrdinalIgnoreCase)) {
+                        $classEntries.Add($entry)
+                        $classNames.Add([System.IO.Path]::GetFileNameWithoutExtension($fn))
+                    } elseif (-not $fn.EndsWith("/")) {
+                        $resourceCount++
+                        if ($fn -match "mixin.*\.json$") {
+                            $mixinEntries.Add($entry)
+                        }
+                    }
+                }
+
+                # -- LAYER 2: Mod metadata inspection -----------------------------
                 $metaNames  = @("fabric.mod.json","quilt.mod.json","mcmod.info","META-INF/mods.toml","META-INF/MANIFEST.MF")
                 $metaAll    = ""
                 $hasMeta    = $false
@@ -167,144 +244,95 @@ function Analyze-InstanceMods {
                     }
                     # Extra heuristic keywords in metadata
                     if (-not $isFlagged) {
-                        $heurKw = @("killaura","aimbot","triggerbot","reach","velocity","esp","wallhack",
-                                    "xray","bhop","fly","freecam","nofall","autoeat","scaffold","phase",
-                                    "step","jesus","wurst","meteor","vape","bleachhack","future","sigma",
-                                    "rusherhack","liquidbounce","autoclicker","crystaloptimizer","hack","cheat")
-                        foreach ($kw in $heurKw) {
-                            if ($metaAll -match "(?i)\b$kw\b") {
-                                $aiRisk += 40; $aiDetails.Add("Metadata contains cheat keyword: '$kw'"); break
-                            }
+                        $mMatch = $heurRegex.Match($metaAll)
+                        if ($mMatch.Success) {
+                            $aiRisk += 40
+                            $aiDetails.Add("Metadata contains cheat keyword: '$($mMatch.Value)'")
                         }
                     }
                 }
 
                 if (-not $isFlagged) {
 
-                    # ── LAYER 3: Mixin configuration analysis ─────────────────────
-                    foreach ($entry in ($allEntries | Where-Object { $_.FullName -match "mixin.*\.json$" })) {
+                    # -- LAYER 3: Mixin configuration analysis ---------------------
+                    foreach ($entry in $mixinEntries) {
                         try {
                             $ms = $entry.Open(); $mr = [System.IO.StreamReader]::new($ms)
                             $mc = $mr.ReadToEnd(); $mr.Close(); $ms.Close()
-                            if ($mc -match "(?i)(killaura|aimbot|autoclicker|reach|velocity|esp|cheat|hack|inject|bypass|antiac)") {
+                            if ($mixinHeurRegex.IsMatch($mc)) {
                                 $aiRisk += 50; $aiDetails.Add("Mixin targets cheat/combat class: $($entry.FullName)"); break
                             }
                         } catch {}
                     }
 
-                    # ── LAYER 4: Known cheat class-path packages ──────────────────
-                    $cheatPkgs = @("wurstclient","meteordevelopment","vape","crystaloptimizer",
-                                   "anchoroptimizer","autoclicker","raven/b","liquidbounce",
-                                   "rusherhack","tenacity","novoline","rise/client","futureclient",
-                                   "astolfo","sigma/client","salware","drip/loader","weavemc",
-                                   "weave/loader","bape/client","lowkey/client","itami/client",
-                                   "dreamclient","entropy/client","spectral/client","pluto/client",
-                                   # Mace / CPVP cheat packages
-                                   "us/kenny","us/kenny/mace","us/kenny/triggerbot","us/kenny/web",
-                                   "maceassist","mace/assist","cpvp/client","cpvpclient",
-                                   "lungemacro","lunge/macro","windchargeassist","windcharge/assist",
-                                   "crystalaura","crystal/aura","autocrystal","auto/crystal")
-
+                    # -- LAYER 4: Known cheat class-path packages ------------------
                     foreach ($entry in $allEntries) {
-                        $eName = $entry.FullName.ToLower()
-                        foreach ($pkg in $cheatPkgs) {
-                            if ($eName -match [regex]::Escape($pkg)) {
-                                $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
-                                $reason = "Contains known cheat class package: $($entry.FullName)"; $aiRisk = 100; break
-                            }
+                        if ($cheatPkgRegex.IsMatch($entry.FullName)) {
+                            $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                            $reason = "Contains known cheat class package: $($entry.FullName)"; $aiRisk = 100; break
                         }
-                        if ($isFlagged) { break }
                     }
 
                     if (-not $isFlagged) {
 
-                        # ── LAYER 5: Suspicious string constants in .class bytecode ─
-                        $suspPats = @(
-                            # Standard cheat combat APIs
-                            "RotationManager","AimAssist","AimBot","lookAt","snapTo","smoothAim",
-                            "smoothRotate","rotateToEntity","rotateToPlayer","predictRotation",
-                            "ReachCheck","ReachExtend","hitboxSize","attackRange","extendHitbox",
-                            "setReach","hitboxExpand","reachDistance",
-                            "EspModule","PlayerESP","StorageESP","TracerModule","drawBox","drawOutline",
-                            "KillAura","MultiAura","TriggerBot","AutoClick","attackEntity",
-                            "autoSwing","swingAura","autoAttack","attackAura","triggerAttack",
-                            "FlightModule","SpeedModule","NoFall","StepModule","TimerModule",
-                            "VelocityModule","AntiKnockback","NoVelocity","velocityMultiplier",
-                            "InjectLoader","AgentLoader","premain","agentmain","retransformClasses",
-                            "AntiScreen","DisableDebugger","AntiAC","BypassAC","checkIntegrity",
-                            "streamProof","StreamProof","hideFromScreen","overlayWindow","invisibleOverlay",
+                        # -- LAYER 5: Suspicious string constants in .class bytecode ---
+                        $checkCount = [Math]::Min(10, $classEntries.Count)
+                        $strHits    = [System.Collections.Generic.List[string]]::new()
 
-                            # Mace / CPVP specific (BetterMace, MaceAssist, etc.)
-                            "MaceAssistManager","MaceAssist","maceAssist","maceTrigger","MaceTrigger",
-                            "LungeMacro","lungeMacro","maceAim","MaceAim","maceBoost","MaceBoost",
-                            "TriggerbotManager","triggerbotManager","triggerBot","TriggerBot",
-                            "PlayerEspManager","playerEspManager","StreamProofOverlayManager",
-                            "WebConfigServer","webConfigServer","explodeMod","ExplodeMod",
-                            "WindChargeAssist","windChargeAssist","maceSwing","autoMace","AutoMace",
-                            "fallVelocityCheck","minFallDistance","aimAssistEnabled","cpvpModule",
-                            "smartCrit","smartCrits","shieldBypass","ShieldBypass","autoAxeSwap",
-                            "CrystalAura","crystalAura","AutoCrystal","autoCrystal","placeDelay",
-                            "breakDelay","clickSimulation","autoGlowstone","autoRefillInventory",
-
-                            # Obfuscator markers
-                            "Allatori","Obfuscated by","Stringer","Zelix","DashO","JBCO","SkidFuscator"
-                        )
-                        $classEntries = @($allEntries | Where-Object { $_.FullName -match "\.class$" } | Select-Object -First 14)
-                        $strHits      = [System.Collections.Generic.List[string]]::new()
-                        $readBuf      = [byte[]]::new(131072)
-
-                        foreach ($ce in $classEntries) {
+                        for ($ci = 0; $ci -lt $checkCount; $ci++) {
+                            $ce = $classEntries[$ci]
                             try {
                                 $ces = $ce.Open()
-                                $readLen = $ces.Read($readBuf, 0, [Math]::Min($ce.Length, 131072))
+                                $readLen = $ces.Read($readBuf, 0, [Math]::Min($ce.Length, 65536))
                                 $ces.Close()
-                                foreach ($cs in (Get-BinaryStrings -buf $readBuf -readLen $readLen -minLen 7)) {
-                                    foreach ($pat in $suspPats) {
-                                        if ($cs -match "(?i)$pat" -and $strHits.Count -lt 6) {
-                                            $strHits.Add($cs.Substring(0, [Math]::Min($cs.Length, 55)).Trim())
-                                        }
+                                $classAscii = [System.Text.Encoding]::ASCII.GetString($readBuf, 0, $readLen)
+                                $matches = $suspRegex.Matches($classAscii)
+                                foreach ($m in $matches) {
+                                    if ($strHits.Count -lt 6 -and -not $strHits.Contains($m.Value)) {
+                                        $strHits.Add($m.Value)
                                     }
                                 }
                             } catch {}
                         }
 
-                        if     ($strHits.Count -ge 4) { $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings — '$($strHits[0])'") }
+                        if     ($strHits.Count -ge 4) { $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'") }
                         elseif ($strHits.Count -ge 2) { $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'") }
                         elseif ($strHits.Count -eq 1) { $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'") }
 
-                        # ── LAYER 6: Obfuscation entropy scoring ──────────────────
-                        $classNames = @($allEntries | Where-Object { $_.FullName -match "\.class$" } |
-                            ForEach-Object { [System.IO.Path]::GetFileNameWithoutExtension($_.FullName) })
-
+                        # -- LAYER 6: Obfuscation entropy scoring ------------------
                         if ($classNames.Count -ge 5) {
-                            $shortRatio = (@($classNames | Where-Object { $_.Length -le 2 }).Count) / $classNames.Count
+                            $shortCount = 0
+                            foreach ($cn in $classNames) { if ($cn.Length -le 2) { $shortCount++ } }
+                            $shortRatio = $shortCount / $classNames.Count
+
                             if ($shortRatio -gt 0.65 -and $classNames.Count -gt 20) {
                                 $aiRisk += 35; $aiDetails.Add("Heavy obfuscation: $([math]::Round($shortRatio*100))% of $($classNames.Count) classes are 1-2 char names")
                             } elseif ($shortRatio -gt 0.35 -and $classNames.Count -gt 10) {
                                 $aiRisk += 14; $aiDetails.Add("Moderate obfuscation: $([math]::Round($shortRatio*100))% short class names")
                             }
-                            $ent = Measure-NameEntropy -s (($classNames | Select-Object -First 30) -join "")
-                            if ($ent -gt 4.6) { $aiRisk += 18; $aiDetails.Add("High class-path entropy ($ent bits) — randomized naming") }
+                            $sampleStr = ($classNames | Select-Object -First 30) -join ""
+                            $ent = Measure-NameEntropy -s $sampleStr
+                            if ($ent -gt 4.6) { $aiRisk += 18; $aiDetails.Add("High class-path entropy ($ent bits) - randomized naming") }
                         }
 
-                        # ── LAYER 7: Suspicious JAR structure ─────────────────────
-                        $classCount    = ($allEntries | Where-Object { $_.FullName -match "\.class$" }).Count
-                        $resourceCount = ($allEntries | Where-Object { $_.FullName -notmatch "\.class$" -and $_.FullName -notmatch "/$" }).Count
-                        $sizeKB        = [math]::Round($mod.Length / 1KB, 1)
+                        # -- LAYER 7: Suspicious JAR structure ---------------------
+                        $classCount = $classEntries.Count
+                        $sizeKB     = [math]::Round($mod.Length / 1KB, 1)
 
                         if (-not $hasMeta)                                { $aiRisk += 20; $aiDetails.Add("No mod metadata (unusual for legitimate mods)") }
                         if ($resourceCount -eq 0 -and $classCount -gt 5) { $aiRisk += 15; $aiDetails.Add("Pure class-only JAR ($classCount classes, 0 resources)") }
                         if ($sizeKB -lt 25 -and $classCount -gt 12)      { $aiRisk += 18; $aiDetails.Add("Suspicious: $sizeKB KB JAR with $classCount classes (typical loader)") }
 
-                        # ── LAYER 8: Dangerous Java API imports ───────────────────
-                        $dangerPkgs = @("java/lang/instrument/","sun/misc/Unsafe","java/lang/reflect/Proxy","com/sun/tools/attach/")
-                        $dangerHits = 0; $smallBuf = [byte[]]::new(8192)
+                        # -- LAYER 8: Dangerous Java API imports -------------------
+                        $dangerHits  = 0
+                        $dangerLimit = [Math]::Min(6, $classEntries.Count)
 
-                        foreach ($ce in ($allEntries | Where-Object { $_.FullName -match "\.class$" } | Select-Object -First 8)) {
+                        for ($di = 0; $di -lt $dangerLimit; $di++) {
+                            $ce = $classEntries[$di]
                             try {
                                 $ces = $ce.Open(); $rlen = $ces.Read($smallBuf, 0, 8192); $ces.Close()
                                 $es  = [System.Text.Encoding]::ASCII.GetString($smallBuf, 0, $rlen)
-                                foreach ($dp in $dangerPkgs) { if ($es -match [regex]::Escape($dp)) { $dangerHits++ } }
+                                if ($dangerRegex.IsMatch($es)) { $dangerHits++ }
                             } catch {}
                         }
                         if ($dangerHits -ge 3) { $aiRisk += 25; $aiDetails.Add("$dangerHits dangerous Java APIs: instrument/unsafe/proxy/attach") }
@@ -312,23 +340,24 @@ function Analyze-InstanceMods {
 
                         $zip.Dispose()
 
-                        # ── Final AI Verdict ───────────────────────────────────────
+                        # -- Final AI Verdict ---------------------------------------
                         $aiRisk = [Math]::Min($aiRisk, 99)
 
                         if ($aiRisk -ge 60) {
-                            $isFlagged = $true; $category = "HEURISTIC RISK — AI FLAGGED"
+                            $isFlagged = $true; $category = "HEURISTIC RISK - AI FLAGGED"
                             $top = if ($aiDetails.Count -gt 0) { $aiDetails[0] } else { "Multiple heuristic triggers" }
-                            $reason = "AI Risk: $aiRisk/99 — $top"
+                            $reason = "AI Risk: $aiRisk/99 - $top"
                         } elseif ($aiRisk -ge 30) {
-                            $category = "LOW RISK — REVIEW SUGGESTED"
+                            $category = "LOW RISK - REVIEW SUGGESTED"
                             $top = if ($aiDetails.Count -gt 0) { $aiDetails[0] } else { "Minor heuristic hit" }
-                            $reason = "AI Risk: $aiRisk/99 — $top"
+                            $reason = "AI Risk: $aiRisk/99 - $top"
                         }
 
                     } else { $zip.Dispose() }
                 } else { $zip.Dispose() }
             } catch {}
         }
+
 
         $modObj = [PSCustomObject]@{
             Name          = $displayName
@@ -344,6 +373,7 @@ function Analyze-InstanceMods {
         }
 
         $result.Mods.Add($modObj)
+        $Global:ModAnalysisCache[$cacheKey] = $modObj
         if ($isFlagged) { $result.FlaggedMods.Add($modObj); $result.FlaggedCount++ }
     }
 
@@ -353,6 +383,7 @@ function Analyze-InstanceMods {
 
 
 function Scan-LastPlayedInstance {
+    param([scriptblock]$ProgressCallback)
     Write-SectionHeader "MINECRAFT INSTANCES & LOG FORENSICS (ALL CLIENTS)"
 
     $instances = [System.Collections.Generic.List[PSCustomObject]]::new()
@@ -755,7 +786,15 @@ function Scan-LastPlayedInstance {
     $analyzedInstances = [System.Collections.Generic.List[PSCustomObject]]::new()
     $allFlaggedModsCount = 0
 
+    $instIdx = 0
+    $instTotal = [Math]::Max(1, $uniqueInstances.Count)
     foreach ($inst in $uniqueInstances) {
+        $instIdx++
+        if ($ProgressCallback) {
+            $curPct = [Math]::Min(35, 16 + [int][Math]::Round(($instIdx / $instTotal) * 19))
+            & $ProgressCallback $curPct "Deep scanning [$($inst.Launcher)] $($inst.Profile)"
+        }
+        if (Get-Command Pump-WpfEvents -ErrorAction SilentlyContinue) { Pump-WpfEvents }
         $logAnalysis = Analyze-InstanceLog -LogFilePath $inst.LogFile
         $modsAnalysis = Analyze-InstanceMods -InstancePath $inst.Path -ProfileName $inst.Profile
 

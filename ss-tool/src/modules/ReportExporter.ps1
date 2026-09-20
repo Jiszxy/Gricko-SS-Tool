@@ -1,3 +1,7 @@
+<#
+    Gricko SS Tool - Scorecard & JSON Report Exporter
+#>
+
 function Export-Report {
     param(
         [switch]$ExportJson,
@@ -5,7 +9,7 @@ function Export-Report {
     )
 
     Write-Host ""
-    Write-PurpleBorder 'GRICKO SS TOOL FORENSIC SCORECARD'
+    Write-PurpleBorder "GRICKO SS TOOL FORENSIC SCORECARD"
 
     $flags = $Global:ReportData.Scorecard.Flags
     $warns = $Global:ReportData.Scorecard.Warnings
@@ -32,15 +36,15 @@ function Export-Report {
     if ($ExportJson -or $OutputPath) {
         $targetFile = $OutputPath
         if (-not $targetFile) {
-            $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+            $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
             $targetFile = "Gricko_Report_${timestamp}.json"
         }
 
         try {
             $Global:ReportData | ConvertTo-Json -Depth 6 | Set-Content -Path $targetFile -Encoding UTF8
-            Write-Alert -Level 'OK' -Message 'Complete forensic report exported to JSON' -Detail $targetFile
+            Write-Alert -Level "OK" -Message "Complete forensic report exported to JSON" -Detail $targetFile
         } catch {
-            Write-Alert -Level 'WARN' -Message 'Failed to export JSON report' -Detail $_.Exception.Message
+            Write-Alert -Level "WARN" -Message "Failed to export JSON report" -Detail $_.Exception.Message
         }
     }
 }

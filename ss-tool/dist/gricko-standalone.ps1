@@ -48,6 +48,7 @@ $Global:ReportData = [ordered]@{
     ActiveInstanceMods = @()
     AllInstances       = @()
     ModFiles           = @()
+    DownloadFiles      = @()
     TempFiles          = @()
     AntiForensics      = @()
     USBDevices         = @()
@@ -57,25 +58,59 @@ $Global:ReportData = [ordered]@{
 $Global:CheatSignatures = @(
     # Ghost & Internal Injection Clients
     "prestige", "grimclient", "grim-client", "vape", "vapelite", "vapev4",
-    "drip", "driplite", "dripsoft", "slinky", "slinkyloader", "raven", "ravenb", 
-    "ravenweave", "weave-loader", "weave", "entropy", "whiteout", "yukon", 
-    "sapphire", "spectral", "dreamclient", "itami", "lowkey", "skilled", "bape", 
+    "drip", "driplite", "dripsoft", "slinky", "slinkyloader", "raven", "ravenb",
+    "ravenweave", "weave-loader", "weave", "entropy", "whiteout", "yukon",
+    "sapphire", "spectral", "dreamclient", "itami", "lowkey", "skilled", "bape",
     "kura", "karma", "breeze", "koid", "phantom", "dope", "haru",
 
     # Blatant, Anarchy & Utility Cheats
-    "rise", "rise6", "augustus", "novoline", "tenacity", "liquidbounce", 
-    "meteor", "wurst", "aristois", "inertial", "inertia", "sigma", "sigma5", 
-    "futureclient", "future-client", "rusherhack", "rusher", "boze", "abyss", 
-    "coffeeclient", "catwithsword", "doomsday", "fdpclient", "lime", "envy", 
-    "pluto", "exhibition", "astolfo", "zeroday", "impact", "bleachhack", "ares", 
+    "rise", "rise6", "augustus", "novoline", "tenacity", "liquidbounce",
+    "meteor", "wurst", "aristois", "inertial", "inertia", "sigma", "sigma5",
+    "futureclient", "future-client", "rusherhack", "rusher", "boze", "abyss",
+    "coffeeclient", "catwithsword", "doomsday", "fdpclient", "lime", "envy",
+    "pluto", "exhibition", "astolfo", "zeroday", "impact", "bleachhack", "ares",
     "kamiblue", "lambda", "cleanerclient", "thunderhack", "mathax",
 
-    # Disallowed Combat Optimizers & Unfair PvP Modifications
+    # Mace / CPVP / Weapon Exploit Mods (1.21+)
+    "bettermace", "better-mace", "maceassist", "mace-assist", "mace.assist",
+    "lungemacro", "lunge-macro", "mace.trigger", "macetrigger",
+    "cpvpmod", "cpvp-mod", "cpvpclient", "macemod", "maceboost",
+    "mace.*optimizer", "windchargemod", "windcharge.*assist",
+
+    # Triggerbot / Auto-Attack / Auto-Swing
+    "triggerbot", "trigger-bot", "triggerbotmanager", "autoattack",
+    "auto-attack", "autoswing", "auto-swing", "swingaura", "attackaura",
+    "combotrigger", "attacktrigger", "clicktrigger", "autoclick",
+    "autoclicker", "auto-clicker", "clickassist",
+
+    # Aim Assist / Rotation Hacks
+    "aimassist", "aim-assist", "maceaimassist", "smoothaim", "smooth-aim",
+    "rotationmanager", "rotation-manager", "aimbot", "aim-bot",
+    "aimhelper", "rotationhelper", "snapaim", "silentaim", "predictiveaim",
+    "targetstrafe", "aimstrafe",
+
+    # Crystal PvP Automation
     "crystal.*optimizer", "crystaloptimizer", "marlow.*crystal",
+    "crystalaura", "crystal-aura", "autocrystal", "auto-crystal",
     "anchor.*optimizer", "anchoroptimizer", "herosanchor",
-    "autoclicker", "auto-clicker", "triggerbot", "reach", "hitbox",
-    "aimassist", "fastplace", "autototem", "autoanchor", "autopot",
-    "freecam", "freelook", "xray", "x-ray", "baritone", "seedcracker"
+    "autocristal", "fastcrystal", "crystalbot",
+
+    # Velocity / Anti-Knockback
+    "velocityhack", "velocity-hack", "antivelocity", "novelocity",
+    "antikb", "anti-kb", "noknockback", "knockbackmod", "kbmod",
+    "velocitymod", "reducekb",
+
+    # Stream-Proof / Anti-Screenshare Evasion
+    "streamproof", "stream-proof", "screenshare.*evad", "antiscreen",
+    "anti-screen", "overlayproof", "hiddenoverlay", "invisibleoverlay",
+    "explodemod",
+
+    # Classic Disallowed Mods
+    "hitbox", "reach", "extendedreach", "reachmod",
+    "fastplace", "autototem", "autoanchor", "autopot", "autoshield",
+    "freecam", "freelook", "xray", "x-ray", "baritone", "seedcracker",
+    "nofall", "nofall.*mod", "antifall", "killaura", "killa.aura",
+    "scaffoldmod", "towerbotmod", "speedmod", "flightmod"
 )
 
 # Known Legitimate Launchers & Mod Loaders
@@ -90,8 +125,13 @@ $Global:LegitimateSignatures = @(
 $Global:SuspiciousSignatures = $Global:CheatSignatures
 
 
+<#
+    Gricko SS Tool - Terminal UI, Colors & Logging Engine
+    Theme: Purple & Blue (Ocean Inspired)
+#>
+
 function Write-PurpleBorder {
-    param([string]$Text = '')
+    param([string]$Text = "")
     if ($NoColor) {
         Write-Host "================================================================================"
         if ($Text) { Write-Host "  $Text" }
@@ -123,24 +163,24 @@ function Write-SectionHeader {
 function Write-Alert {
     param(
         [Parameter(Mandatory=$true)]
-        [ValidateSet('OK', 'INFO', 'WARN', 'FLAG')]
+        [ValidateSet("OK", "INFO", "WARN", "FLAG")]
         [string]$Level,
 
         [Parameter(Mandatory=$true)]
         [string]$Message,
 
-        [string]$Detail = ''
+        [string]$Detail = ""
     )
 
-    $timestamp = (Get-Date).ToString('HH:mm:ss')
+    $timestamp = (Get-Date).ToString("HH:mm:ss")
     $tag = "[$Level]"
-    $color = 'White'
+    $color = "White"
 
     switch ($Level) {
-        'OK'   { $color = 'Green';   $Global:ReportData.Scorecard.Clean++ }
-        'INFO' { $color = 'Cyan';    $Global:ReportData.Scorecard.Info++ }
-        'WARN' { $color = 'Yellow';  $Global:ReportData.Scorecard.Warnings++ }
-        'FLAG' { $color = 'Red';     $Global:ReportData.Scorecard.Flags++ }
+        "OK"   { $color = "Green";   $Global:ReportData.Scorecard.Clean++ }
+        "INFO" { $color = "Cyan";    $Global:ReportData.Scorecard.Info++ }
+        "WARN" { $color = "Yellow";  $Global:ReportData.Scorecard.Warnings++ }
+        "FLAG" { $color = "Red";     $Global:ReportData.Scorecard.Flags++ }
     }
 
     $entry = [PSCustomObject]@{
@@ -183,6 +223,7 @@ function Update-ScanStatus {
     }
 }
 
+
 function Show-Banner {
     if (-not $NoColor) {
         Write-Host ""
@@ -198,10 +239,14 @@ function Show-Banner {
         Write-Host " ==============================================================================" -ForegroundColor Magenta
         Write-Host ""
     } else {
-        Write-Host "`n=== GRICKO SS TOOL v$($Global:ToolVersion) ===`n"
+        Write-Host "`n=== GRICKO SS TOOL (Minecraft Forensic Scanner v$($Global:ToolVersion)) ===`n"
     }
 }
 
+
+<#
+    Gricko SS Tool - Self-Elevation & Privilege Escalation Handler
+#>
 
 function Assert-Elevation {
     $currentPrincipal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
@@ -210,12 +255,12 @@ function Assert-Elevation {
 
     if (-not $isAdmin) {
         if ($NoElevation) {
-            Write-Alert -Level 'WARN' -Message 'Running as Standard User (NoElevation specified).' -Detail 'BAM, Prefetch, and low-level registry keys may be inaccessible.'
+            Write-Alert -Level "WARN" -Message "Running as Standard User (NoElevation specified)." -Detail "BAM, Prefetch, and low-level registry keys may be inaccessible."
             return
         }
 
-        Write-Alert -Level 'WARN' -Message 'Administrator privileges required for low-level forensic artifacts (Prefetch, BAM, EventLogs).'
-        Write-Alert -Level 'INFO' -Message 'Attempting automatic self-elevation...'
+        Write-Alert -Level "WARN" -Message "Administrator privileges required for low-level forensic artifacts (Prefetch, BAM, EventLogs)."
+        Write-Alert -Level "INFO" -Message "Attempting automatic self-elevation..."
 
         $scriptPath = $PSCommandPath
         if (-not $scriptPath) {
@@ -224,21 +269,21 @@ function Assert-Elevation {
 
         if ($scriptPath -and (Test-Path $scriptPath)) {
             $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
-            if ($ExportJson) { $arguments += ' -ExportJson' }
+            if ($ExportJson) { $arguments += " -ExportJson" }
             if ($OutputPath) { $arguments += " -OutputPath `"$OutputPath`"" }
-            if ($NoColor)    { $arguments += ' -NoColor' }
+            if ($NoColor)    { $arguments += " -NoColor" }
 
             try {
-                Start-Process -FilePath 'powershell.exe' -ArgumentList $arguments -Verb RunAs
+                Start-Process -FilePath "powershell.exe" -ArgumentList $arguments -Verb RunAs
                 exit
             } catch {
-                Write-Alert -Level 'WARN' -Message 'UAC Elevation was declined or failed.' -Detail 'Continuing scan in unprivileged mode.'
+                Write-Alert -Level "WARN" -Message "UAC Elevation was declined or failed." -Detail "Continuing scan in unprivileged mode."
             }
         } else {
-            Write-Alert -Level 'WARN' -Message 'Script running from memory or stream. Cannot auto-elevate file.' -Detail 'Run PowerShell as Administrator for full forensic visibility.'
+            Write-Alert -Level "WARN" -Message "Script running from memory or stream. Cannot auto-elevate file." -Detail "Run PowerShell as Administrator for full forensic visibility."
         }
     } else {
-        Write-Alert -Level 'OK' -Message 'Administrative elevation confirmed.' -Detail 'Full access to Prefetch, BAM, and low-level artifacts.'
+        Write-Alert -Level "OK" -Message "Administrative elevation confirmed." -Detail "Full access to Prefetch, BAM, and low-level artifacts."
     }
 }
 
@@ -320,7 +365,6 @@ function Analyze-InstanceMods {
 
     if (-not $InstancePath -or -not (Test-Path $InstancePath)) { return $result }
 
-    # Check both 'mods' and Feather's 'user-mods'
     $candidateModFolders = @(
         (Join-Path $InstancePath "mods"),
         (Join-Path $InstancePath "user-mods"),
@@ -337,69 +381,273 @@ function Analyze-InstanceMods {
 
     if ($modFiles.Count -eq 0) { return $result }
 
-    # Deduplicate jars by filename
     $uniqueJars = $modFiles | Sort-Object Name -Unique
     Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
 
-    foreach ($mod in $uniqueJars) {
-        $isFlagged = $false
-        $reason = "Clean"
-        $category = "CLEAN"
-        $displayName = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
+    if (-not $Global:ModAnalysisCache) {
+        $Global:ModAnalysisCache = @{}
+    }
 
-        # 1. Filename pattern matching
+    # Pre-compiled high-performance regexes for instant multi-pattern evaluation
+    $cheatPkgs = @("wurstclient","meteordevelopment","vape","crystaloptimizer",
+                   "anchoroptimizer","autoclicker","raven/b","liquidbounce",
+                   "rusherhack","tenacity","novoline","rise/client","futureclient",
+                   "astolfo","sigma/client","salware","drip/loader","weavemc",
+                   "weave/loader","bape/client","lowkey/client","itami/client",
+                   "dreamclient","entropy/client","spectral/client","pluto/client",
+                   "us/kenny","us/kenny/mace","us/kenny/triggerbot","us/kenny/web",
+                   "maceassist","mace/assist","cpvp/client","cpvpclient",
+                   "lungemacro","lunge/macro","windchargeassist","windcharge/assist",
+                   "crystalaura","crystal/aura","autocrystal","auto/crystal")
+    $cheatPkgRegex = [regex]::new('(?i)(' + (($cheatPkgs | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+
+    $suspPats = @(
+        "RotationManager","AimAssist","AimBot","lookAt","snapTo","smoothAim",
+        "smoothRotate","rotateToEntity","rotateToPlayer","predictRotation",
+        "ReachCheck","ReachExtend","hitboxSize","attackRange","extendHitbox",
+        "setReach","hitboxExpand","reachDistance",
+        "EspModule","PlayerESP","StorageESP","TracerModule","drawBox","drawOutline",
+        "KillAura","MultiAura","TriggerBot","AutoClick","attackEntity",
+        "autoSwing","swingAura","autoAttack","attackAura","triggerAttack",
+        "FlightModule","SpeedModule","NoFall","StepModule","TimerModule",
+        "VelocityModule","AntiKnockback","NoVelocity","velocityMultiplier",
+        "InjectLoader","AgentLoader","premain","agentmain","retransformClasses",
+        "AntiScreen","DisableDebugger","AntiAC","BypassAC","checkIntegrity",
+        "streamProof","StreamProof","hideFromScreen","overlayWindow","invisibleOverlay",
+        "MaceAssistManager","MaceAssist","maceAssist","maceTrigger","MaceTrigger",
+        "LungeMacro","lungeMacro","maceAim","MaceAim","maceBoost","MaceBoost",
+        "TriggerbotManager","triggerbotManager","triggerBot","TriggerBot",
+        "PlayerEspManager","playerEspManager","StreamProofOverlayManager",
+        "WebConfigServer","webConfigServer","explodeMod","ExplodeMod",
+        "WindChargeAssist","windChargeAssist","maceSwing","autoMace","AutoMace",
+        "fallVelocityCheck","minFallDistance","aimAssistEnabled","cpvpModule",
+        "smartCrit","smartCrits","shieldBypass","ShieldBypass","autoAxeSwap",
+        "CrystalAura","crystalAura","AutoCrystal","autoCrystal","placeDelay",
+        "breakDelay","clickSimulation","autoGlowstone","autoRefillInventory",
+        "Allatori","Obfuscated by","Stringer","Zelix","DashO","JBCO","SkidFuscator"
+    )
+    $suspRegex = [regex]::new('(?i)\b(' + (($suspPats | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')\b', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+    $dangerRegex = [regex]::new('(?i)(java/lang/instrument/|sun/misc/Unsafe|java/lang/reflect/Proxy|com/sun/tools/attach/)', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+    $heurRegex = [regex]::new('(?i)\b(killaura|aimbot|triggerbot|reach|velocitymultiplier|antivelocity|novelocity|esp|wallhack|xray|bhop|fly|freecam|nofall|autoeat|scaffold|phase|step|jesus|wurst|meteor|vape|bleachhack|future|sigma|rusherhack|liquidbounce|autoclicker|crystaloptimizer|hack|cheat)\b', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+    $mixinHeurRegex = [regex]::new('(?i)(killaura|aimbot|autoclicker|reach|velocitymultiplier|antivelocity|esp|cheat|hack|antiac)', [System.Text.RegularExpressions.RegexOptions]::Compiled)
+
+    # AI Helper: Shannon entropy (randomness measure for obfuscation detection)
+    function Measure-NameEntropy {
+        param([string]$s)
+        if (-not $s -or $s.Length -lt 4) { return 0.0 }
+        $freq = @{}
+        foreach ($c in $s.ToCharArray()) { $k = "$c"; if ($freq[$k]) { $freq[$k]++ } else { $freq[$k] = 1 } }
+        $len = $s.Length; $ent = 0.0
+        foreach ($v in $freq.Values) { $p = $v / $len; $ent -= $p * [Math]::Log($p, 2) }
+        return [Math]::Round($ent, 3)
+    }
+
+    $readBuf  = [byte[]]::new(65536)
+    $smallBuf = [byte[]]::new(8192)
+
+    foreach ($mod in $uniqueJars) {
+        if (Get-Command Pump-WpfEvents -ErrorAction SilentlyContinue) { Pump-WpfEvents }
+
+        $cacheKey = "$($mod.Name)|$($mod.Length)"
+        if ($Global:ModAnalysisCache.ContainsKey($cacheKey)) {
+            $cached = $Global:ModAnalysisCache[$cacheKey]
+            $cloned = [PSCustomObject]@{
+                Name          = $cached.Name
+                FileName      = $cached.FileName
+                FullPath      = $mod.FullName
+                SizeKB        = $cached.SizeKB
+                LastWriteTime = $mod.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss")
+                IsFlagged     = $cached.IsFlagged
+                Category      = $cached.Category
+                Reason        = $cached.Reason
+                AIRiskScore   = $cached.AIRiskScore
+                AIDetails     = $cached.AIDetails
+            }
+            $result.Mods.Add($cloned)
+            if ($cloned.IsFlagged) { $result.FlaggedMods.Add($cloned); $result.FlaggedCount++ }
+            continue
+        }
+
+        $isFlagged    = $false
+        $reason       = "Clean"
+        $category     = "CLEAN"
+        $aiRisk       = 0
+        $aiDetails    = [System.Collections.Generic.List[string]]::new()
+        $displayName  = [System.IO.Path]::GetFileNameWithoutExtension($mod.Name)
+
+        # -- LAYER 1: Filename signature matching ------------------------------
         foreach ($sig in $Global:CheatSignatures) {
             if ($mod.Name -match "(?i)$sig") {
-                $isFlagged = $true
-                $category = "FLAGGED CHEAT / DISALLOWED"
-                $reason = "Matches cheat / disallowed signature: $sig"
-                break
+                $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                $reason = "Filename matches known cheat signature: $sig"; $aiRisk = 100; break
             }
         }
 
-        # 2. Deep inspection inside JAR
         if (-not $isFlagged) {
             try {
-                $zip = [System.IO.Compression.ZipFile]::OpenRead($mod.FullName)
+                $zip        = [System.IO.Compression.ZipFile]::OpenRead($mod.FullName)
+                $allEntries = @($zip.Entries)
 
-                # Check fabric.mod.json / quilt.mod.json / mcmod.info
-                $metaEntry = $zip.GetEntry("fabric.mod.json")
-                if (-not $metaEntry) { $metaEntry = $zip.GetEntry("quilt.mod.json") }
-                if (-not $metaEntry) { $metaEntry = $zip.GetEntry("mcmod.info") }
+                # Single-pass fast classification of all entries (avoids slow PowerShell pipelines)
+                $classEntries  = [System.Collections.Generic.List[System.IO.Compression.ZipArchiveEntry]]::new()
+                $classNames    = [System.Collections.Generic.List[string]]::new()
+                $mixinEntries  = [System.Collections.Generic.List[System.IO.Compression.ZipArchiveEntry]]::new()
+                $resourceCount = 0
 
-                if ($metaEntry) {
-                    $stream = $metaEntry.Open()
-                    $reader = [System.IO.StreamReader]::new($stream)
-                    $metaContent = $reader.ReadToEnd()
-                    $reader.Close()
-                    $stream.Close()
+                foreach ($entry in $allEntries) {
+                    $fn = $entry.FullName
+                    if ($fn.EndsWith(".class", [System.StringComparison]::OrdinalIgnoreCase)) {
+                        $classEntries.Add($entry)
+                        $classNames.Add([System.IO.Path]::GetFileNameWithoutExtension($fn))
+                    } elseif (-not $fn.EndsWith("/")) {
+                        $resourceCount++
+                        if ($fn -match "mixin.*\.json$") {
+                            $mixinEntries.Add($entry)
+                        }
+                    }
+                }
 
+                # -- LAYER 2: Mod metadata inspection -----------------------------
+                $metaNames  = @("fabric.mod.json","quilt.mod.json","mcmod.info","META-INF/mods.toml","META-INF/MANIFEST.MF")
+                $metaAll    = ""
+                $hasMeta    = $false
+
+                foreach ($mn in $metaNames) {
+                    $me = $zip.GetEntry($mn)
+                    if ($me) {
+                        $hasMeta = $true
+                        try {
+                            $ms = $me.Open(); $mr = [System.IO.StreamReader]::new($ms)
+                            $metaAll += $mr.ReadToEnd(); $mr.Close(); $ms.Close()
+                        } catch {}
+                    }
+                }
+
+                if ($metaAll) {
+                    # Known cheat signature in metadata id/name
                     foreach ($sig in $Global:CheatSignatures) {
-                        if ($metaContent -match "(?i)`"id`"\s*:\s*`"[^`"]*$sig" -or $metaContent -match "(?i)`"name`"\s*:\s*`"[^`"]*$sig") {
-                            $isFlagged = $true
-                            $category = "FLAGGED CHEAT / DISALLOWED"
-                            $reason = "Internal metadata matches signature: $sig"
-                            break
+                        if ($metaAll -match "(?i)""id""\s*:\s*""[^""]*$sig" -or
+                            $metaAll -match "(?i)""name""\s*:\s*""[^""]*$sig") {
+                            $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                            $reason = "Mod metadata id/name matches cheat signature: $sig"; $aiRisk = 100; break
+                        }
+                    }
+                    # Extra heuristic keywords in metadata
+                    if (-not $isFlagged) {
+                        $mMatch = $heurRegex.Match($metaAll)
+                        if ($mMatch.Success) {
+                            $aiRisk += 40
+                            $aiDetails.Add("Metadata contains cheat keyword: '$($mMatch.Value)'")
                         }
                     }
                 }
 
-                # Check class package entries
                 if (-not $isFlagged) {
-                    foreach ($entry in $zip.Entries) {
-                        $eName = $entry.FullName.ToLower()
-                        if ($eName -match "wurstclient" -or $eName -match "meteordevelopment" -or $eName -match "vape" -or $eName -match "crystaloptimizer" -or $eName -match "anchoroptimizer" -or $eName -match "autoclicker") {
-                            $isFlagged = $true
-                            $category = "FLAGGED CHEAT / DISALLOWED"
-                            $reason = "Internal package contains cheat class: $($entry.FullName)"
-                            break
+
+                    # -- LAYER 3: Mixin configuration analysis ---------------------
+                    foreach ($entry in $mixinEntries) {
+                        try {
+                            $ms = $entry.Open(); $mr = [System.IO.StreamReader]::new($ms)
+                            $mc = $mr.ReadToEnd(); $mr.Close(); $ms.Close()
+                            if ($mixinHeurRegex.IsMatch($mc)) {
+                                $aiRisk += 50; $aiDetails.Add("Mixin targets cheat/combat class: $($entry.FullName)"); break
+                            }
+                        } catch {}
+                    }
+
+                    # -- LAYER 4: Known cheat class-path packages ------------------
+                    foreach ($entry in $allEntries) {
+                        if ($cheatPkgRegex.IsMatch($entry.FullName)) {
+                            $isFlagged = $true; $category = "FLAGGED CHEAT / DISALLOWED"
+                            $reason = "Contains known cheat class package: $($entry.FullName)"; $aiRisk = 100; break
                         }
                     }
-                }
 
-                $zip.Dispose()
+                    if (-not $isFlagged) {
+
+                        # -- LAYER 5: Suspicious string constants in .class bytecode ---
+                        $checkCount = [Math]::Min(10, $classEntries.Count)
+                        $strHits    = [System.Collections.Generic.List[string]]::new()
+
+                        for ($ci = 0; $ci -lt $checkCount; $ci++) {
+                            $ce = $classEntries[$ci]
+                            try {
+                                $ces = $ce.Open()
+                                $readLen = $ces.Read($readBuf, 0, [Math]::Min($ce.Length, 65536))
+                                $ces.Close()
+                                $classAscii = [System.Text.Encoding]::ASCII.GetString($readBuf, 0, $readLen)
+                                $matches = $suspRegex.Matches($classAscii)
+                                foreach ($m in $matches) {
+                                    if ($strHits.Count -lt 6 -and -not $strHits.Contains($m.Value)) {
+                                        $strHits.Add($m.Value)
+                                    }
+                                }
+                            } catch {}
+                        }
+
+                        if     ($strHits.Count -ge 4) { $aiRisk += 55; $aiDetails.Add("Bytecode: $($strHits.Count) cheat API strings - '$($strHits[0])'") }
+                        elseif ($strHits.Count -ge 2) { $aiRisk += 28; $aiDetails.Add("Bytecode suspicious strings: '$($strHits[0])'") }
+                        elseif ($strHits.Count -eq 1) { $aiRisk += 10; $aiDetails.Add("Bytecode minor suspicious string: '$($strHits[0])'") }
+
+                        # -- LAYER 6: Obfuscation entropy scoring ------------------
+                        if ($classNames.Count -ge 5) {
+                            $shortCount = 0
+                            foreach ($cn in $classNames) { if ($cn.Length -le 2) { $shortCount++ } }
+                            $shortRatio = $shortCount / $classNames.Count
+
+                            if ($shortRatio -gt 0.65 -and $classNames.Count -gt 20) {
+                                $aiRisk += 35; $aiDetails.Add("Heavy obfuscation: $([math]::Round($shortRatio*100))% of $($classNames.Count) classes are 1-2 char names")
+                            } elseif ($shortRatio -gt 0.35 -and $classNames.Count -gt 10) {
+                                $aiRisk += 14; $aiDetails.Add("Moderate obfuscation: $([math]::Round($shortRatio*100))% short class names")
+                            }
+                            $sampleStr = ($classNames | Select-Object -First 30) -join ""
+                            $ent = Measure-NameEntropy -s $sampleStr
+                            if ($ent -gt 4.6) { $aiRisk += 18; $aiDetails.Add("High class-path entropy ($ent bits) - randomized naming") }
+                        }
+
+                        # -- LAYER 7: Suspicious JAR structure ---------------------
+                        $classCount = $classEntries.Count
+                        $sizeKB     = [math]::Round($mod.Length / 1KB, 1)
+
+                        if (-not $hasMeta)                                { $aiRisk += 20; $aiDetails.Add("No mod metadata (unusual for legitimate mods)") }
+                        if ($resourceCount -eq 0 -and $classCount -gt 5) { $aiRisk += 15; $aiDetails.Add("Pure class-only JAR ($classCount classes, 0 resources)") }
+                        if ($sizeKB -lt 25 -and $classCount -gt 12)      { $aiRisk += 18; $aiDetails.Add("Suspicious: $sizeKB KB JAR with $classCount classes (typical loader)") }
+
+                        # -- LAYER 8: Dangerous Java API imports -------------------
+                        $dangerHits  = 0
+                        $dangerLimit = [Math]::Min(6, $classEntries.Count)
+
+                        for ($di = 0; $di -lt $dangerLimit; $di++) {
+                            $ce = $classEntries[$di]
+                            try {
+                                $ces = $ce.Open(); $rlen = $ces.Read($smallBuf, 0, 8192); $ces.Close()
+                                $es  = [System.Text.Encoding]::ASCII.GetString($smallBuf, 0, $rlen)
+                                if ($dangerRegex.IsMatch($es)) { $dangerHits++ }
+                            } catch {}
+                        }
+                        if ($dangerHits -ge 3) { $aiRisk += 25; $aiDetails.Add("$dangerHits dangerous Java APIs: instrument/unsafe/proxy/attach") }
+                        elseif ($dangerHits -gt 0) { $aiRisk += 8 }
+
+                        $zip.Dispose()
+
+                        # -- Final AI Verdict ---------------------------------------
+                        $aiRisk = [Math]::Min($aiRisk, 99)
+
+                        if ($aiRisk -ge 60) {
+                            $isFlagged = $true; $category = "HEURISTIC RISK - AI FLAGGED"
+                            $top = if ($aiDetails.Count -gt 0) { $aiDetails[0] } else { "Multiple heuristic triggers" }
+                            $reason = "AI Risk: $aiRisk/99 - $top"
+                        } elseif ($aiRisk -ge 30) {
+                            $category = "LOW RISK - REVIEW SUGGESTED"
+                            $top = if ($aiDetails.Count -gt 0) { $aiDetails[0] } else { "Minor heuristic hit" }
+                            $reason = "AI Risk: $aiRisk/99 - $top"
+                        }
+
+                    } else { $zip.Dispose() }
+                } else { $zip.Dispose() }
             } catch {}
         }
+
 
         $modObj = [PSCustomObject]@{
             Name          = $displayName
@@ -410,20 +658,22 @@ function Analyze-InstanceMods {
             IsFlagged     = $isFlagged
             Category      = $category
             Reason        = $reason
+            AIRiskScore   = $aiRisk
+            AIDetails     = if ($aiDetails.Count -gt 0) { ($aiDetails -join " | ") } else { "" }
         }
 
         $result.Mods.Add($modObj)
-        if ($isFlagged) {
-            $result.FlaggedMods.Add($modObj)
-            $result.FlaggedCount++
-        }
+        $Global:ModAnalysisCache[$cacheKey] = $modObj
+        if ($isFlagged) { $result.FlaggedMods.Add($modObj); $result.FlaggedCount++ }
     }
 
     $result.TotalCount = $result.Mods.Count
     return $result
 }
 
+
 function Scan-LastPlayedInstance {
+    param([scriptblock]$ProgressCallback)
     Write-SectionHeader "MINECRAFT INSTANCES & LOG FORENSICS (ALL CLIENTS)"
 
     $instances = [System.Collections.Generic.List[PSCustomObject]]::new()
@@ -826,7 +1076,15 @@ function Scan-LastPlayedInstance {
     $analyzedInstances = [System.Collections.Generic.List[PSCustomObject]]::new()
     $allFlaggedModsCount = 0
 
+    $instIdx = 0
+    $instTotal = [Math]::Max(1, $uniqueInstances.Count)
     foreach ($inst in $uniqueInstances) {
+        $instIdx++
+        if ($ProgressCallback) {
+            $curPct = [Math]::Min(35, 16 + [int][Math]::Round(($instIdx / $instTotal) * 19))
+            & $ProgressCallback $curPct "Deep scanning [$($inst.Launcher)] $($inst.Profile)"
+        }
+        if (Get-Command Pump-WpfEvents -ErrorAction SilentlyContinue) { Pump-WpfEvents }
         $logAnalysis = Analyze-InstanceLog -LogFilePath $inst.LogFile
         $modsAnalysis = Analyze-InstanceMods -InstancePath $inst.Path -ProfileName $inst.Profile
 
@@ -965,14 +1223,18 @@ function Scan-InstanceMods {
 }
 
 
+<#
+    Gricko SS Tool - Java & Process Memory Forensic Scanner
+#>
+
 function Scan-JavaProcesses {
-    Write-SectionHeader 'PROCESS & MEMORY ANALYSIS (ACTIVE JVM / INJECTION)'
+    Write-SectionHeader "PROCESS & MEMORY ANALYSIS (ACTIVE JVM / INJECTION)"
     
     $procQuery = "Name = 'javaw.exe' or Name = 'java.exe'"
     $processes = Get-CimInstance Win32_Process -Filter $procQuery
 
     if (-not $processes) {
-        Write-Alert -Level 'INFO' -Message 'No active javaw.exe or java.exe processes found.' -Detail 'Game may be closed.'
+        Write-Alert -Level "INFO" -Message "No active javaw.exe or java.exe processes found." -Detail "Screenshare may be conducted post-gameplay or client was terminated."
         return
     }
 
@@ -986,27 +1248,28 @@ function Scan-JavaProcesses {
             ProcessId       = $pidNum
             Name            = $proc.Name
             ExecutablePath  = $execPath
-            CreationDate    = if ($createTime) { $createTime.ToString('o') } else { 'N/A' }
+            CreationDate    = if ($createTime) { $createTime.ToString("o") } else { "N/A" }
             CommandLine     = $cmdLine
             JavaAgents      = @()
             SuspiciousFlags = @()
         }
 
-        Write-Alert -Level 'INFO' -Message 'Detected active Java process' -Detail "PID: $pidNum | Name: $($proc.Name)"
+        Write-Alert -Level "INFO" -Message "Detected active Java process" -Detail "PID: $pidNum | Name: $($proc.Name)"
 
         if (-not $cmdLine) {
-            Write-Alert -Level 'WARN' -Message "Process PID $pidNum CommandLine is empty or protected."
+            Write-Alert -Level "WARN" -Message "Process PID $pidNum CommandLine is empty or protected."
             $Global:ReportData.JavaProcesses += [PSCustomObject]$procInfo
             continue
         }
 
+        # Check for Java Agents (-javaagent)
         $agentMatches = [regex]::Matches($cmdLine, '-javaagent:([^\s]+)')
         if ($agentMatches.Count -gt 0) {
             foreach ($m in $agentMatches) {
                 $agentPath = $m.Groups[1].Value.Trim('"', "'")
                 $procInfo.JavaAgents += $agentPath
 
-                $isKnownLegit = ($agentPath -like '*jetbrains*' -or $agentPath -like '*byte-buddy*' -or $agentPath -like '*fabric-loader*')
+                $isKnownLegit = ($agentPath -like "*jetbrains*" -or $agentPath -like "*byte-buddy*" -or $agentPath -like "*fabric-loader*")
                 $isSuspiciousKeyword = $false
                 foreach ($sig in $Global:SuspiciousSignatures) {
                     if ($agentPath -like "*$sig*") {
@@ -1016,35 +1279,37 @@ function Scan-JavaProcesses {
                 }
 
                 if ($isSuspiciousKeyword) {
-                    Write-Alert -Level 'FLAG' -Message 'SUSPICIOUS INJECTED JAVA AGENT DETECTED!' -Detail "PID: $pidNum | Agent: $agentPath"
-                } elseif ($agentPath -like '*Temp*' -or $agentPath -like '*AppData\Local\Temp*' -or $agentPath -like '*Downloads*') {
-                    if ($agentPath -like '*theseus.jar*') {
-                        Write-Alert -Level 'INFO' -Message 'Legitimate Modrinth Launcher Agent loaded from Temp' -Detail $agentPath
+                    Write-Alert -Level "FLAG" -Message "SUSPICIOUS INJECTED JAVA AGENT DETECTED!" -Detail "PID: $pidNum | Agent: $agentPath"
+                } elseif ($agentPath -like "*Temp*" -or $agentPath -like "*AppData\Local\Temp*" -or $agentPath -like "*Downloads*") {
+                    if ($agentPath -like "*theseus.jar*") {
+                        Write-Alert -Level "INFO" -Message "Legitimate Modrinth Launcher Agent loaded from Temp" -Detail $agentPath
                     } else {
-                        Write-Alert -Level 'FLAG' -Message 'JAVA AGENT LOADED FROM UNTRUSTED/TEMP DIRECTORY!' -Detail "PID: $pidNum | Path: $agentPath"
+                        Write-Alert -Level "FLAG" -Message "JAVA AGENT LOADED FROM UNTRUSTED/TEMP DIRECTORY!" -Detail "PID: $pidNum | Path: $agentPath"
                     }
                 } elseif (-not $isKnownLegit) {
-                    Write-Alert -Level 'WARN' -Message "Unverified Java Agent loaded on PID $pidNum" -Detail $agentPath
+                    Write-Alert -Level "WARN" -Message "Unverified Java Agent loaded on PID $pidNum" -Detail $agentPath
                 } else {
-                    Write-Alert -Level 'INFO' -Message 'Standard Java Agent loaded' -Detail $agentPath
+                    Write-Alert -Level "INFO" -Message "Standard Java Agent loaded" -Detail $agentPath
                 }
             }
         } else {
-            Write-Alert -Level 'OK' -Message "No active -javaagent flags detected on PID $pidNum."
+            Write-Alert -Level "OK" -Message "No active -javaagent flags detected on PID $pidNum."
         }
 
-        if ($cmdLine -like '*-noverify*') {
-            Write-Alert -Level 'WARN' -Message "Abnormal JVM flag '-noverify' found." -Detail 'Disables bytecode verification; commonly used by runtime injectors.'
-            $procInfo.SuspiciousFlags += '-noverify'
+        # Check for abnormal JVM parameters
+        if ($cmdLine -like "*-noverify*") {
+            Write-Alert -Level "WARN" -Message "Abnormal JVM flag '-noverify' found." -Detail "Disables bytecode verification; commonly used by runtime injectors."
+            $procInfo.SuspiciousFlags += "-noverify"
         }
-        if ($cmdLine -like '*-Xbootclasspath*') {
-            Write-Alert -Level 'WARN' -Message 'Custom boot classpath manipulation detected (-Xbootclasspath).' -Detail "PID: $pidNum"
-            $procInfo.SuspiciousFlags += '-Xbootclasspath'
+        if ($cmdLine -like "*-Xbootclasspath*") {
+            Write-Alert -Level "WARN" -Message "Custom boot classpath manipulation detected (-Xbootclasspath)." -Detail "PID: $pidNum"
+            $procInfo.SuspiciousFlags += "-Xbootclasspath"
         }
 
+        # Keyword match against entire command line
         foreach ($sig in $Global:SuspiciousSignatures) {
             if ($cmdLine -match "(?i)\b$sig\b") {
-                Write-Alert -Level 'FLAG' -Message 'SUSPICIOUS KEYWORD IN RUNNING JVM COMMAND LINE!' -Detail "PID: $pidNum | Signature: '$sig'"
+                Write-Alert -Level "FLAG" -Message "SUSPICIOUS KEYWORD IN RUNNING JVM COMMAND LINE!" -Detail "PID: $pidNum | Signature: '$sig'"
                 $procInfo.SuspiciousFlags += "Signature: $sig"
             }
         }
@@ -1054,25 +1319,29 @@ function Scan-JavaProcesses {
 }
 
 
+<#
+    Gricko SS Tool - Prefetch Trace & Execution History Scanner
+#>
+
 function Scan-PrefetchTraces {
     param([int]$Hours = $HoursPrefetch)
     Write-SectionHeader "EXECUTION TRACES: PREFETCH (PAST $Hours HOURS)"
 
-    $prefetchDir = 'C:\Windows\Prefetch'
+    $prefetchDir = "C:\Windows\Prefetch"
     if (-not (Test-Path $prefetchDir)) {
-        Write-Alert -Level 'WARN' -Message "Prefetch directory '$prefetchDir' not found or inaccessible." -Detail 'Elevation required.'
+        Write-Alert -Level "WARN" -Message "Prefetch directory '$prefetchDir' not found or inaccessible." -Detail "Elevation required."
         return
     }
 
     $timeCutoff = (Get-Date).AddHours(-$Hours)
-    $pfFiles = Get-ChildItem -Path $prefetchDir -Filter '*.pf' -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $timeCutoff } | Sort-Object LastWriteTime -Descending
+    $pfFiles = Get-ChildItem -Path $prefetchDir -Filter "*.pf" | Where-Object { $_.LastWriteTime -ge $timeCutoff } | Sort-Object LastWriteTime -Descending
 
     if (-not $pfFiles) {
-        Write-Alert -Level 'WARN' -Message "No Prefetch files modified within the last $Hours hours." -Detail 'Prefetch may be disabled or cleared.'
+        Write-Alert -Level "WARN" -Message "No Prefetch files modified within the last $Hours hours." -Detail "Prefetch may be disabled, cleared, or system recently booted."
         return
     }
 
-    Write-Alert -Level 'INFO' -Message "Analyzed $($pfFiles.Count) recent Prefetch execution records."
+    Write-Alert -Level "INFO" -Message "Analyzed $($pfFiles.Count) recent Prefetch execution records."
 
     $flaggedCount = 0
     foreach ($file in $pfFiles) {
@@ -1080,7 +1349,7 @@ function Scan-PrefetchTraces {
         $execName = ($rawName -replace '-[A-F0-9]{8}$', '')
 
         $isMatch = $false
-        $matchedSig = ''
+        $matchedSig = ""
 
         foreach ($sig in $Global:SuspiciousSignatures) {
             if ($execName -match "(?i)$sig") {
@@ -1093,7 +1362,7 @@ function Scan-PrefetchTraces {
         $entry = [PSCustomObject]@{
             File           = $file.Name
             Executable     = $execName
-            LastExecution  = $file.LastWriteTime.ToString('o')
+            LastExecution  = $file.LastWriteTime.ToString("o")
             Size           = $file.Length
             SignatureMatch = $matchedSig
             Flagged        = $isMatch
@@ -1102,21 +1371,25 @@ function Scan-PrefetchTraces {
 
         if ($isMatch) {
             $flaggedCount++
-            Write-Alert -Level 'FLAG' -Message 'SUSPICIOUS EXECUTABLE IN PREFETCH!' -Detail "$($file.Name) (Last Executed: $($file.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')))"
-        } elseif ($execName -in @('FSUTIL', 'CMD', 'POWERSHELL', 'REGEDIT', 'TASKKILL', 'VSSADMIN')) {
-            Write-Alert -Level 'INFO' -Message 'System utility execution in Prefetch' -Detail "$($file.Name) at $($file.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
+            Write-Alert -Level "FLAG" -Message "SUSPICIOUS EXECUTABLE IN PREFETCH!" -Detail "$($file.Name) (Last Executed: $($file.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss')))"
+        } elseif ($execName -in @("FSUTIL", "CMD", "POWERSHELL", "REGEDIT", "TASKKILL", "VSSADMIN")) {
+            Write-Alert -Level "INFO" -Message "System utility execution in Prefetch" -Detail "$($file.Name) at $($file.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
         }
     }
 
     if ($flaggedCount -eq 0) {
-        Write-Alert -Level 'OK' -Message 'No known cheat or cleaner signatures identified in recent Prefetch files.'
+        Write-Alert -Level "OK" -Message "No known cheat or cleaner signatures identified in recent Prefetch files."
     }
 }
 
 
+<#
+    Gricko SS Tool - BAM/DAM Kernel Timestamps & UserAssist ROT13 Registry Scanner
+#>
+
 function Convert-Rot13 {
     param([string]$InputText)
-    if ([string]::IsNullOrEmpty($InputText)) { return '' }
+    if ([string]::IsNullOrEmpty($InputText)) { return "" }
     $chars = $InputText.ToCharArray()
     for ($i = 0; $i -lt $chars.Length; $i++) {
         $c = [int]$chars[$i]
@@ -1134,9 +1407,9 @@ function Scan-BAMRegistry {
     Write-SectionHeader "EXECUTION TRACES: BAM / DAM REGISTRY (PAST $Hours HOURS)"
 
     $bamBases = @(
-        'HKLM:\SYSTEM\CurrentControlSet\Services\bam\State\UserSettings',
-        'HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings',
-        'HKLM:\SYSTEM\CurrentControlSet\Services\dam\UserSettings'
+        "HKLM:\SYSTEM\CurrentControlSet\Services\bam\State\UserSettings",
+        "HKLM:\SYSTEM\CurrentControlSet\Services\bam\UserSettings",
+        "HKLM:\SYSTEM\CurrentControlSet\Services\dam\UserSettings"
     )
 
     $bamRoot = $null
@@ -1148,7 +1421,7 @@ function Scan-BAMRegistry {
     }
 
     if (-not $bamRoot) {
-        Write-Alert -Level 'WARN' -Message 'BAM/DAM registry path not accessible.' -Detail 'Requires Administrator elevation.'
+        Write-Alert -Level "WARN" -Message "BAM/DAM registry path not accessible." -Detail "Requires Administrator elevation."
         return
     }
 
@@ -1159,12 +1432,13 @@ function Scan-BAMRegistry {
 
     foreach ($key in $subKeys) {
         $sid = $key.PSChildName
-        $prop = Get-ItemProperty -Path $key.PSPath -ErrorAction SilentlyContinue
+        $prop = Get-ItemProperty -Path $key.PSPath
 
         foreach ($p in $prop.PSObject.Properties) {
-            if ($p.Name -like '*\*' -and $p.Value -is [byte[]]) {
+            if ($p.Name -like "*\*" -and $p.Value -is [byte[]]) {
                 $rawPath = $p.Name
                 $bytes = $p.Value
+
                 $execDate = $null
 
                 if ($bytes.Length -ge 8) {
@@ -1194,7 +1468,7 @@ function Scan-BAMRegistry {
                 if ($execDate -and $execDate -ge $timeCutoff) {
                     $totalFound++
                     $isMatch = $false
-                    $matchedSig = ''
+                    $matchedSig = ""
 
                     foreach ($sig in $Global:SuspiciousSignatures) {
                         if ($rawPath -match "(?i)$sig") {
@@ -1207,7 +1481,7 @@ function Scan-BAMRegistry {
                     $entry = [PSCustomObject]@{
                         SID            = $sid
                         BinaryPath     = $rawPath
-                        LastExecution  = $execDate.ToString('o')
+                        LastExecution  = $execDate.ToString("o")
                         SignatureMatch = $matchedSig
                         Flagged        = $isMatch
                     }
@@ -1215,10 +1489,10 @@ function Scan-BAMRegistry {
 
                     if ($isMatch) {
                         $flaggedCount++
-                        Write-Alert -Level 'FLAG' -Message 'BAM RECORD MATCHES CHEAT SIGNATURE!' -Detail "$rawPath (Executed: $($execDate.ToString('yyyy-MM-dd HH:mm:ss')))"
-                    } elseif ($rawPath -like '*\AppData\Local\Temp\*' -or $rawPath -like '*\Downloads\*') {
-                        if ($rawPath -like '*.exe' -or $rawPath -like '*.jar') {
-                            Write-Alert -Level 'WARN' -Message 'Executable run from Temp/Downloads recorded in BAM' -Detail "$rawPath ($($execDate.ToString('yyyy-MM-dd HH:mm:ss')))"
+                        Write-Alert -Level "FLAG" -Message "BAM RECORD MATCHES CHEAT SIGNATURE!" -Detail "$rawPath (Executed: $($execDate.ToString('yyyy-MM-dd HH:mm:ss')))"
+                    } elseif ($rawPath -like "*\AppData\Local\Temp\*" -or $rawPath -like "*\Downloads\*") {
+                        if ($rawPath -like "*.exe" -or $rawPath -like "*.jar") {
+                            Write-Alert -Level "WARN" -Message "Executable run from Temp/Downloads recorded in BAM" -Detail "$rawPath ($($execDate.ToString('yyyy-MM-dd HH:mm:ss')))"
                         }
                     }
                 }
@@ -1227,33 +1501,33 @@ function Scan-BAMRegistry {
     }
 
     if ($totalFound -gt 0) {
-        Write-Alert -Level 'INFO' -Message "Identified $totalFound recent execution events across user accounts via BAM."
+        Write-Alert -Level "INFO" -Message "Identified $totalFound recent execution events across user accounts via BAM."
     } else {
-        Write-Alert -Level 'INFO' -Message "No BAM entries found within the last $Hours hours."
+        Write-Alert -Level "INFO" -Message "No BAM entries found within the last $Hours hours."
     }
 
     if ($flaggedCount -eq 0) {
-        Write-Alert -Level 'OK' -Message 'No known cheat signatures detected in active BAM records.'
+        Write-Alert -Level "OK" -Message "No known cheat signatures detected in active BAM records."
     }
 }
 
 function Scan-UserAssist {
-    Write-SectionHeader 'EXECUTION TRACES: USERASSIST (ROT13 DECODED)'
+    Write-SectionHeader "EXECUTION TRACES: USERASSIST (ROT13 DECODED)"
 
-    $uaBasePath = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist'
+    $uaBasePath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\UserAssist"
     if (-not (Test-Path $uaBasePath)) {
-        Write-Alert -Level 'INFO' -Message 'UserAssist registry key not found.'
+        Write-Alert -Level "INFO" -Message "UserAssist registry key not found."
         return
     }
 
-    $guidKeys = Get-ChildItem -Path $uaBasePath -ErrorAction SilentlyContinue
+    $guidKeys = Get-ChildItem -Path $uaBasePath
     $totalFound = 0
     $flaggedCount = 0
 
     foreach ($gKey in $guidKeys) {
-        $countPath = Join-Path $gKey.PSPath 'Count'
+        $countPath = Join-Path $gKey.PSPath "Count"
         if (Test-Path $countPath) {
-            $props = (Get-ItemProperty -Path $countPath -ErrorAction SilentlyContinue).PSObject.Properties
+            $props = (Get-ItemProperty -Path $countPath).PSObject.Properties
             foreach ($p in $props) {
                 if ($p.Value -is [byte[]] -and $p.Value.Length -ge 68) {
                     $decodedName = Convert-Rot13 -InputText $p.Name
@@ -1272,10 +1546,10 @@ function Scan-UserAssist {
                         }
                     } catch {}
 
-                    if ($decodedName -like '*.exe' -or $decodedName -like '*.jar' -or $decodedName -like '*.lnk') {
+                    if ($decodedName -like "*.exe" -or $decodedName -like "*.jar" -or $decodedName -like "*.lnk") {
                         $totalFound++
                         $isMatch = $false
-                        $matchedSig = ''
+                        $matchedSig = ""
 
                         foreach ($sig in $Global:SuspiciousSignatures) {
                             if ($decodedName -match "(?i)$sig") {
@@ -1286,18 +1560,18 @@ function Scan-UserAssist {
                         }
 
                         $entry = [PSCustomObject]@{
-                            GUID           = $gKey.PSChildName
-                            DecodedPath    = $decodedName
-                            RunCount       = $runCount
-                            LastExecution  = if ($execDate) { $execDate.ToString('o') } else { 'N/A' }
-                            SignatureMatch = $matchedSig
-                            Flagged        = $isMatch
+                            GUID          = $gKey.PSChildName
+                            DecodedPath   = $decodedName
+                            RunCount      = $runCount
+                            LastExecution = if ($execDate) { $execDate.ToString("o") } else { "N/A" }
+                            SignatureMatch= $matchedSig
+                            Flagged       = $isMatch
                         }
                         $Global:ReportData.UserAssistTraces += $entry
 
                         if ($isMatch) {
                             $flaggedCount++
-                            Write-Alert -Level 'FLAG' -Message 'USERASSIST MATCH FOR KNOWN CHEAT SIGNATURE!' -Detail "$decodedName (Runs: $runCount | Last: $(if ($execDate){$execDate.ToString('yyyy-MM-dd HH:mm:ss')}else{'N/A'}))"
+                            Write-Alert -Level "FLAG" -Message "USERASSIST MATCH FOR KNOWN CHEAT SIGNATURE!" -Detail "$decodedName (Runs: $runCount | Last: $(if ($execDate){$execDate.ToString('yyyy-MM-dd HH:mm:ss')}else{'N/A'}))"
                         }
                     }
                 }
@@ -1306,13 +1580,17 @@ function Scan-UserAssist {
     }
 
     if ($totalFound -gt 0) {
-        Write-Alert -Level 'INFO' -Message "Decoded $totalFound application execution traces from UserAssist."
+        Write-Alert -Level "INFO" -Message "Decoded $totalFound application execution traces from UserAssist."
     }
     if ($flaggedCount -eq 0) {
-        Write-Alert -Level 'OK' -Message 'No known cheat signatures present in UserAssist history.'
+        Write-Alert -Level "OK" -Message "No known cheat signatures present in UserAssist history."
     }
 }
 
+
+<#
+    Gricko SS Tool - File System, Mods, Temp Drops & Anti-Forensics Scanner
+#>
 
 function Scan-FileSystem {
     param([int]$Hours = $HoursFiles)
@@ -1320,16 +1598,17 @@ function Scan-FileSystem {
 
     $timeCutoff = (Get-Date).AddHours(-$Hours)
 
-    $mcModsPath = Join-Path $env:APPDATA '.minecraft\mods'
+    # 1. Minecraft Mods Directory Scan
+    $mcModsPath = Join-Path $env:APPDATA ".minecraft\mods"
     if (Test-Path $mcModsPath) {
-        $mods = Get-ChildItem -Path $mcModsPath -File -ErrorAction SilentlyContinue
-        Write-Alert -Level 'INFO' -Message 'Found Minecraft mods directory' -Detail "Path: $mcModsPath ($($mods.Count) files)"
+        $mods = Get-ChildItem -Path $mcModsPath -File
+        Write-Alert -Level "INFO" -Message "Found Minecraft mods directory" -Detail "Path: $mcModsPath ($($mods.Count) files)"
 
         $modFlags = 0
         foreach ($mod in $mods) {
             $isRecent = ($mod.LastWriteTime -ge $timeCutoff)
             $isSusName = $false
-            $matchedSig = ''
+            $matchedSig = ""
 
             foreach ($sig in $Global:SuspiciousSignatures) {
                 if ($mod.Name -match "(?i)$sig") {
@@ -1339,13 +1618,13 @@ function Scan-FileSystem {
                 }
             }
 
-            $isAbnormalExt = ($mod.Extension -notin @('.jar', '.litemod', '.disabled'))
+            $isAbnormalExt = ($mod.Extension -notin @(".jar", ".litemod", ".disabled"))
 
             $entry = [PSCustomObject]@{
                 FileName      = $mod.Name
                 FullPath      = $mod.FullName
                 SizeKB        = [math]::Round($mod.Length / 1KB, 2)
-                LastWriteTime = $mod.LastWriteTime.ToString('o')
+                LastWriteTime = $mod.LastWriteTime.ToString("o")
                 Recent        = $isRecent
                 Flagged       = ($isSusName -or $isAbnormalExt)
                 Reason        = if ($isSusName) { "Signature: $matchedSig" } elseif ($isAbnormalExt) { "Abnormal Extension: $($mod.Extension)" } else { "Clean" }
@@ -1354,22 +1633,23 @@ function Scan-FileSystem {
 
             if ($isSusName) {
                 $modFlags++
-                Write-Alert -Level 'FLAG' -Message 'CHEAT MOD DETECTED IN MODS DIRECTORY!' -Detail "$($mod.Name) (Matches: $matchedSig)"
+                Write-Alert -Level "FLAG" -Message "CHEAT MOD DETECTED IN MODS DIRECTORY!" -Detail "$($mod.Name) (Matches: $matchedSig)"
             } elseif ($isAbnormalExt) {
                 $modFlags++
-                Write-Alert -Level 'FLAG' -Message 'ABNORMAL FILE DETECTED IN MODS DIRECTORY!' -Detail "$($mod.Name) (Extension: $($mod.Extension))"
+                Write-Alert -Level "FLAG" -Message "ABNORMAL FILE DETECTED IN MODS DIRECTORY!" -Detail "$($mod.Name) (Extension: $($mod.Extension))"
             } elseif ($isRecent) {
-                Write-Alert -Level 'WARN' -Message "Mod file recently modified (within $Hours hours)" -Detail "$($mod.Name) at $($mod.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
+                Write-Alert -Level "WARN" -Message "Mod file recently modified (within $Hours hours)" -Detail "$($mod.Name) at $($mod.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
             }
         }
 
         if ($modFlags -eq 0) {
-            Write-Alert -Level 'OK' -Message 'No known cheat clients or abnormal files detected in .minecraft\mods.'
+            Write-Alert -Level "OK" -Message "No known cheat clients or abnormal files detected in .minecraft\mods."
         }
     } else {
-        Write-Alert -Level 'INFO' -Message "No standard .minecraft\mods directory found at $mcModsPath."
+        Write-Alert -Level "INFO" -Message "No standard .minecraft\mods directory found at $mcModsPath."
     }
 
+    # 2. Temp Directories Inspection
     $tempPaths = @($env:TEMP, "$env:LOCALAPPDATA\Temp") | Select-Object -Unique
     $tempFilesFound = 0
     $tempFlags = 0
@@ -1377,12 +1657,12 @@ function Scan-FileSystem {
     foreach ($tPath in $tempPaths) {
         if (Test-Path $tPath) {
             $recentTemp = Get-ChildItem -Path $tPath -File -Recurse -Depth 2 -ErrorAction SilentlyContinue |
-                Where-Object { $_.LastWriteTime -ge $timeCutoff -and ($_.Extension -in @('.jar', '.dll', '.exe', '.class')) }
+                Where-Object { $_.LastWriteTime -ge $timeCutoff -and ($_.Extension -in @(".jar", ".dll", ".exe", ".class")) }
 
             foreach ($tf in $recentTemp) {
                 $tempFilesFound++
                 $isSus = $false
-                $matchedSig = ''
+                $matchedSig = ""
 
                 foreach ($sig in $Global:SuspiciousSignatures) {
                     if ($tf.Name -match "(?i)$sig") {
@@ -1397,35 +1677,36 @@ function Scan-FileSystem {
                     FullPath      = $tf.FullName
                     Extension     = $tf.Extension
                     SizeKB        = [math]::Round($tf.Length / 1KB, 2)
-                    LastWriteTime = $tf.LastWriteTime.ToString('o')
+                    LastWriteTime = $tf.LastWriteTime.ToString("o")
                     Flagged       = $isSus
                 }
                 $Global:ReportData.TempFiles += $entry
 
                 if ($isSus) {
                     $tempFlags++
-                    Write-Alert -Level 'FLAG' -Message 'SUSPICIOUS PAYLOAD IN TEMP DIRECTORY!' -Detail "$($tf.FullName) (Signature: $matchedSig)"
-                } elseif ($tf.Extension -eq '.jar' -or $tf.Extension -eq '.dll') {
-                    Write-Alert -Level 'WARN' -Message 'Recently dropped executable/library in Temp' -Detail "$($tf.Name) at $($tf.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
+                    Write-Alert -Level "FLAG" -Message "SUSPICIOUS PAYLOAD IN TEMP DIRECTORY!" -Detail "$($tf.FullName) (Signature: $matchedSig)"
+                } elseif ($tf.Extension -eq ".jar" -or $tf.Extension -eq ".dll") {
+                    Write-Alert -Level "WARN" -Message "Recently dropped executable/library in Temp" -Detail "$($tf.Name) at $($tf.LastWriteTime.ToString('yyyy-MM-dd HH:mm:ss'))"
                 }
             }
         }
     }
 
     if ($tempFilesFound -eq 0) {
-        Write-Alert -Level 'OK' -Message 'No recently created .jar or .dll binaries found in Temp.'
+        Write-Alert -Level "OK" -Message "No recently created .jar or .dll binaries found in Temp."
     } elseif ($tempFlags -eq 0) {
-        Write-Alert -Level 'OK' -Message 'No known cheat signatures in recent Temp drops.'
+        Write-Alert -Level "OK" -Message "No known cheat signatures in recent Temp drops."
     }
 
-    $dlPath = Join-Path $env:USERPROFILE 'Downloads'
+    # 3. Downloads Directory Inspection
+    $dlPath = Join-Path $env:USERPROFILE "Downloads"
     if (Test-Path $dlPath) {
-        $recentDownloads = Get-ChildItem -Path $dlPath -File -ErrorAction SilentlyContinue |
-            Where-Object { $_.LastWriteTime -ge $timeCutoff -and ($_.Extension -in @('.jar', '.exe', '.zip', '.rar', '.7z')) }
+        $recentDownloads = Get-ChildItem -Path $dlPath -File |
+            Where-Object { $_.LastWriteTime -ge $timeCutoff -and ($_.Extension -in @(".jar", ".exe", ".zip", ".rar", ".7z")) }
 
         foreach ($dl in $recentDownloads) {
             $isSus = $false
-            $matchedSig = ''
+            $matchedSig = ""
 
             foreach ($sig in $Global:SuspiciousSignatures) {
                 if ($dl.Name -match "(?i)$sig") {
@@ -1439,17 +1720,21 @@ function Scan-FileSystem {
                 FileName      = $dl.Name
                 FullPath      = $dl.FullName
                 SizeKB        = [math]::Round($dl.Length / 1KB, 2)
-                LastWriteTime = $dl.LastWriteTime.ToString('o')
+                LastWriteTime = $dl.LastWriteTime.ToString("o")
                 Flagged       = $isSus
+            }
+            if (-not $Global:ReportData.DownloadFiles) {
+                $Global:ReportData['DownloadFiles'] = @()
             }
             $Global:ReportData.DownloadFiles += $entry
 
             if ($isSus) {
-                Write-Alert -Level 'FLAG' -Message 'CHEAT UTILITY IN RECENT DOWNLOADS!' -Detail "$($dl.Name) (Matches: $matchedSig)"
+                Write-Alert -Level "FLAG" -Message "CHEAT UTILITY IN RECENT DOWNLOADS!" -Detail "$($dl.Name) (Matches: $matchedSig)"
             }
         }
     }
 
+    # 4. Anti-Forensics & Log Tampering Checks
     $logClearCutoff = (Get-Date).AddHours(-72)
     $clearedEvents = @()
 
@@ -1462,73 +1747,79 @@ function Scan-FileSystem {
 
     if ($clearedEvents.Count -gt 0) {
         foreach ($ev in $clearedEvents) {
-            Write-Alert -Level 'FLAG' -Message 'EVENT LOG PURGE DETECTED (ANTI-FORENSICS)!' -Detail "Log: $($ev.LogName) cleared at $($ev.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss'))"
+            Write-Alert -Level "FLAG" -Message "EVENT LOG PURGE DETECTED (ANTI-FORENSICS)!" -Detail "Log: $($ev.LogName) cleared at $($ev.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss'))"
             $Global:ReportData.AntiForensics += [PSCustomObject]@{
-                Type        = 'EventLogCleared'
+                Type        = "EventLogCleared"
                 LogName     = $ev.LogName
-                TimeCreated = $ev.TimeCreated.ToString('o')
+                TimeCreated = $ev.TimeCreated.ToString("o")
                 Id          = $ev.Id
             }
         }
     } else {
-        Write-Alert -Level 'OK' -Message 'No Security or System event log clearances recorded in the last 72 hours.'
+        Write-Alert -Level "OK" -Message "No Security or System event log clearances recorded in the last 72 hours."
     }
 
+    # 5. Check USN Journal State
     try {
         $usnOutput = & fsutil usn queryjournal C: 2>&1
-        $usnText = $usnOutput -join ' '
-        if ($usnText -like '*is not active*' -or $usnText -like '*Error:*') {
-            Write-Alert -Level 'FLAG' -Message 'USN JOURNAL HAS BEEN DELETED OR DISABLED ON DRIVE C:!' -Detail 'Critical anti-forensics indicator used to erase file deletion history.'
+        $usnText = $usnOutput -join " "
+        if ($usnText -like "*is not active*" -or $usnText -like "*Error:*") {
+            Write-Alert -Level "FLAG" -Message "USN JOURNAL HAS BEEN DELETED OR DISABLED ON DRIVE C:!" -Detail "Critical anti-forensics indicator used to erase file deletion history."
             $Global:ReportData.AntiForensics += [PSCustomObject]@{
-                Type    = 'USNJournalDisabled'
+                Type    = "USNJournalDisabled"
                 Message = $usnText
             }
         } else {
-            Write-Alert -Level 'OK' -Message 'NTFS USN Change Journal is active and healthy on volume C:.'
+            Write-Alert -Level "OK" -Message "NTFS USN Change Journal is active and healthy on volume C:."
         }
     } catch {
-        Write-Alert -Level 'INFO' -Message 'Could not query USN Journal status (requires admin privileges).'
+        Write-Alert -Level "INFO" -Message "Could not query USN Journal status (requires admin privileges)."
     }
 
+    # 6. Check Recycle Bin
     try {
         $shell = New-Object -ComObject Shell.Application
         $recycleBin = $shell.Namespace(10)
         $rbCount = $recycleBin.Items().Count
-        Write-Alert -Level 'INFO' -Message "Recycle Bin item count: $rbCount"
+        Write-Alert -Level "INFO" -Message "Recycle Bin item count: $rbCount"
         
         foreach ($item in $recycleBin.Items()) {
-            if ($item.Name -like '*.jar' -or $item.Name -like '*.exe') {
-                Write-Alert -Level 'WARN' -Message 'Executable or JAR located inside Recycle Bin' -Detail $item.Name
+            if ($item.Name -like "*.jar" -or $item.Name -like "*.exe") {
+                Write-Alert -Level "WARN" -Message "Executable or JAR located inside Recycle Bin" -Detail $item.Name
             }
         }
     } catch {}
 }
 
 
+<#
+    Gricko SS Tool - Hardware & USB Storage Forensic Scanner
+#>
+
 function Scan-USBStorage {
-    Write-SectionHeader 'HARDWARE & STORAGE TRACES: USB STOR HISTORY'
+    Write-SectionHeader "HARDWARE & STORAGE TRACES: USB STOR HISTORY"
 
-    $usbStorPath = 'HKLM:\SYSTEM\CurrentControlSet\Enum\USBSTOR'
+    $usbStorPath = "HKLM:\SYSTEM\CurrentControlSet\Enum\USBSTOR"
     if (-not (Test-Path $usbStorPath)) {
-        Write-Alert -Level 'INFO' -Message 'No USBSTOR registry key present or accessible.'
+        Write-Alert -Level "INFO" -Message "No USBSTOR registry key present or accessible."
         return
     }
 
-    $devices = Get-ChildItem -Path $usbStorPath -ErrorAction SilentlyContinue
+    $devices = Get-ChildItem -Path $usbStorPath
     if (-not $devices) {
-        Write-Alert -Level 'OK' -Message 'No USB storage devices recorded in registry history.'
+        Write-Alert -Level "OK" -Message "No USB storage devices recorded in registry history."
         return
     }
 
-    Write-Alert -Level 'INFO' -Message "Enumerated $($devices.Count) historical USB storage devices."
+    Write-Alert -Level "INFO" -Message "Enumerated $($devices.Count) historical USB storage devices."
 
     foreach ($dev in $devices) {
         $devName = $dev.PSChildName
-        $instances = Get-ChildItem -Path $dev.PSPath -ErrorAction SilentlyContinue
+        $instances = Get-ChildItem -Path $dev.PSPath
 
         foreach ($inst in $instances) {
-            $prop = Get-ItemProperty -Path $inst.PSPath -ErrorAction SilentlyContinue
-            $friendly = if ($prop.FriendlyName) { $prop.FriendlyName } else { 'Generic USB Storage Device' }
+            $prop = Get-ItemProperty -Path $inst.PSPath
+            $friendly = if ($prop.FriendlyName) { $prop.FriendlyName } else { "Generic USB Storage Device" }
             $service = $prop.Service
 
             $entry = [PSCustomObject]@{
@@ -1539,22 +1830,27 @@ function Scan-USBStorage {
             }
             $Global:ReportData.USBDevices += $entry
 
-            Write-Alert -Level 'INFO' -Message 'USB Storage Device in Registry' -Detail "$friendly ($devName)"
+            Write-Alert -Level "INFO" -Message "USB Storage Device in Registry" -Detail "$friendly ($devName)"
         }
     }
 
+    # Query currently connected USB Disks
     try {
-        $activeUSB = Get-CimInstance Win32_DiskDrive -Filter "InterfaceType = 'USB'" -ErrorAction SilentlyContinue
+        $activeUSB = Get-CimInstance Win32_DiskDrive -Filter "InterfaceType = 'USB'"
         if ($activeUSB) {
             foreach ($usb in $activeUSB) {
-                Write-Alert -Level 'WARN' -Message 'ACTIVE USB DRIVE CURRENTLY CONNECTED!' -Detail "$($usb.Model) (DeviceID: $($usb.DeviceID) | Size: $([math]::Round($usb.Size / 1GB, 2)) GB)"
+                Write-Alert -Level "WARN" -Message "ACTIVE USB DRIVE CURRENTLY CONNECTED!" -Detail "$($usb.Model) (DeviceID: $($usb.DeviceID) | Size: $([math]::Round($usb.Size / 1GB, 2)) GB)"
             }
         } else {
-            Write-Alert -Level 'OK' -Message 'No active/removable USB storage drives currently mounted.'
+            Write-Alert -Level "OK" -Message "No active/removable USB storage drives currently mounted."
         }
     } catch {}
 }
 
+
+<#
+    Gricko SS Tool - Scorecard & JSON Report Exporter
+#>
 
 function Export-Report {
     param(
@@ -1563,7 +1859,7 @@ function Export-Report {
     )
 
     Write-Host ""
-    Write-PurpleBorder 'GRICKO SS TOOL FORENSIC SCORECARD'
+    Write-PurpleBorder "GRICKO SS TOOL FORENSIC SCORECARD"
 
     $flags = $Global:ReportData.Scorecard.Flags
     $warns = $Global:ReportData.Scorecard.Warnings
@@ -1590,15 +1886,15 @@ function Export-Report {
     if ($ExportJson -or $OutputPath) {
         $targetFile = $OutputPath
         if (-not $targetFile) {
-            $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+            $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
             $targetFile = "Gricko_Report_${timestamp}.json"
         }
 
         try {
             $Global:ReportData | ConvertTo-Json -Depth 6 | Set-Content -Path $targetFile -Encoding UTF8
-            Write-Alert -Level 'OK' -Message 'Complete forensic report exported to JSON' -Detail $targetFile
+            Write-Alert -Level "OK" -Message "Complete forensic report exported to JSON" -Detail $targetFile
         } catch {
-            Write-Alert -Level 'WARN' -Message 'Failed to export JSON report' -Detail $_.Exception.Message
+            Write-Alert -Level "WARN" -Message "Failed to export JSON report" -Detail $_.Exception.Message
         }
     }
 }
@@ -1618,7 +1914,7 @@ function Show-GrickoGui {
 
     Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
-    $logoBase64 = "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"
+    $logoBase64 = "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"
 
     function Get-LogoSource {
         try {
@@ -1911,7 +2207,7 @@ function Show-GrickoGui {
                     </Border>
 
                     <!-- Filter / Search Box -->
-                    <Border Grid.Row="2" Background="#161822" CornerRadius="6" BorderBrush="#262A38" BorderThickness="1" Padding="10,4" Margin="0,0,0,8">
+                    <Border Grid.Row="2" Background="#161822" CornerRadius="6" BorderBrush="#262A38" BorderThickness="1" Padding="10,4" Margin="0,0,0,6">
                         <DockPanel>
                             <TextBlock Text="Search:" Foreground="#64748B" FontSize="11" VerticalAlignment="Center" Margin="0,0,8,0"/>
                             <TextBox Name="TxtModSearch" Background="Transparent" Foreground="#F1F5F9" BorderThickness="0" FontSize="11.5" VerticalAlignment="Center"/>
@@ -2127,8 +2423,17 @@ function Show-GrickoGui {
             $mods
         }
 
-        # Sort: Flagged first, then alphabetical
-        $sortedMods = $filteredMods | Sort-Object -Property @{ Expression = { $_.IsFlagged }; Descending = $true }, @{ Expression = { $_.Name }; Descending = $false }
+        # Sort: Known cheats first, then AI-flagged by risk score, then low-risk, then clean alphabetical
+        $sortedMods = $filteredMods | Sort-Object -Property @{
+            Expression = {
+                if ($_.IsFlagged -and $_.Category -notlike "*HEURISTIC*") { 3 }
+                elseif ($_.Category -like "*HEURISTIC*") { 2 }
+                elseif ($_.Category -like "*LOW RISK*") { 1 }
+                else { 0 }
+            }; Descending = $true
+        }, @{ Expression = { if ($_.AIRiskScore) { $_.AIRiskScore } else { 0 } }; Descending = $true },
+           @{ Expression = { $_.Name }; Descending = $false }
+
 
         foreach ($mod in $sortedMods) {
             $card = [System.Windows.Controls.Border]::new()
@@ -2154,22 +2459,47 @@ function Show-GrickoGui {
             $tbBadge.FontSize = 9.5
             $tbBadge.FontWeight = [System.Windows.FontWeights]::Bold
 
-            if ($mod.IsFlagged) {
-                $card.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#2A1215")
+            $isAiHeuristic  = ($mod.Category -like "*HEURISTIC*")
+            $isLowRisk      = ($mod.Category -like "*LOW RISK*")
+
+            if ($mod.IsFlagged -and -not $isAiHeuristic) {
+                # Known cheat signature - Red
+                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#2A1215")
                 $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7F1D1D")
                 $card.BorderThickness = [System.Windows.Thickness]::new(1)
-                $badge.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7F1D1D")
-                $tbBadge.Text = "SUSPICIOUS / CHEAT"
+                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#7F1D1D")
+                $tbBadge.Text      = "KNOWN CHEAT"
                 $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FCA5A5")
-                $tbName.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
+                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#F87171")
+            } elseif ($isAiHeuristic) {
+                # AI heuristic risk - Orange
+                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#271810")
+                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#92400E")
+                $card.BorderThickness = [System.Windows.Thickness]::new(1)
+                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#92400E")
+                $riskScore = if ($mod.AIRiskScore) { " ($($mod.AIRiskScore)/99)" } else { "" }
+                $tbBadge.Text      = "AI RISK$riskScore"
+                $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FCD34D")
+                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FB923C")
+            } elseif ($isLowRisk) {
+                # Low risk / review - Yellow
+                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#1C1900")
+                $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#713F12")
+                $card.BorderThickness = [System.Windows.Thickness]::new(1)
+                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#713F12")
+                $riskScore = if ($mod.AIRiskScore) { " ($($mod.AIRiskScore)/99)" } else { "" }
+                $tbBadge.Text      = "REVIEW$riskScore"
+                $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FEF08A")
+                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#EAB308")
             } else {
-                $card.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#131620")
+                # Clean - Green
+                $card.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#131620")
                 $card.BorderBrush = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#1E2330")
                 $card.BorderThickness = [System.Windows.Thickness]::new(1)
-                $badge.Background = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#064E3B")
-                $tbBadge.Text = "CLEAN"
+                $badge.Background  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#064E3B")
+                $tbBadge.Text      = "CLEAN"
                 $tbBadge.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#6EE7B7")
-                $tbName.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#E2E8F0")
+                $tbName.Foreground  = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#E2E8F0")
             }
 
             $badge.Child = $tbBadge
@@ -2177,13 +2507,27 @@ function Show-GrickoGui {
             $headerDock.Children.Add($tbName) | Out-Null
             $cardStack.Children.Add($headerDock) | Out-Null
 
-            if ($mod.IsFlagged) {
+            if ($mod.IsFlagged -or $isAiHeuristic -or $isLowRisk) {
                 $tbReason = [System.Windows.Controls.TextBlock]::new()
-                $tbReason.Text = "[!] " + $mod.Reason
-                $tbReason.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#FBBF24")
+                $prefix = if ($mod.IsFlagged -and -not $isAiHeuristic) { "[!] " } elseif ($isAiHeuristic) { "[AI] " } else { "[?] " }
+                $tbReason.Text = $prefix + $mod.Reason
+                $reasonColor = if ($mod.IsFlagged -and -not $isAiHeuristic) { "#FBBF24" } elseif ($isAiHeuristic) { "#FB923C" } else { "#EAB308" }
+                $tbReason.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString($reasonColor)
                 $tbReason.FontSize = 10.5
-                $tbReason.Margin = [System.Windows.Thickness]::new(0, 2, 0, 2)
+                $tbReason.TextWrapping = [System.Windows.TextWrapping]::Wrap
+                $tbReason.Margin = [System.Windows.Thickness]::new(0, 2, 0, 1)
                 $cardStack.Children.Add($tbReason) | Out-Null
+
+                # Show additional AI analysis details if present
+                if ($mod.AIDetails -and $mod.AIDetails.Length -gt 0) {
+                    $tbAI = [System.Windows.Controls.TextBlock]::new()
+                    $tbAI.Text = "AI Analysis: " + $mod.AIDetails
+                    $tbAI.Foreground = [System.Windows.Media.BrushConverter]::new().ConvertFromString("#94A3B8")
+                    $tbAI.FontSize = 10
+                    $tbAI.TextWrapping = [System.Windows.TextWrapping]::Wrap
+                    $tbAI.Margin = [System.Windows.Thickness]::new(0, 1, 0, 1)
+                    $cardStack.Children.Add($tbAI) | Out-Null
+                }
             }
 
             $tbMeta = [System.Windows.Controls.TextBlock]::new()
@@ -2331,7 +2675,8 @@ function Show-GrickoGui {
         $detailsContentPanel.Children.Clear()
         $modsListPanel.Children.Clear()
 
-        # Reset state
+        try {
+            # Reset state
         $Global:ReportData.Scorecard.Flags = 0
         $Global:ReportData.Scorecard.Warnings = 0
         $Global:ReportData.Scorecard.Clean = 0
@@ -2341,63 +2686,69 @@ function Show-GrickoGui {
         $Global:ReportData.ActiveInstanceMods = @()
         $Global:ReportData.AllInstances = @()
 
-        # Step 1: Memory & Active Process Inspection (0% to 15% - ~18s)
+        # Step 1: Memory & Active Process Inspection (0% to 15%)
         for ($pct = 1; $pct -le 15; $pct++) {
             $scanProgress.Value = $pct
             $txtProgressStatus.Text = "Scanning active memory & running processes... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 1200
+            Start-Sleep -Milliseconds 35
         }
-        Scan-JavaProcesses
+        try { Scan-JavaProcesses } catch { Write-Host "Process scan error: $_" }
         Pump-WpfEvents
 
-        # Step 2: Minecraft Instances, Versions & Deep Mods Inspection (15% to 35% - ~24s)
-        Scan-LastPlayedInstance
-        for ($pct = 16; $pct -le 35; $pct++) {
-            $scanProgress.Value = $pct
-            $txtProgressStatus.Text = "Deep scanning all Minecraft clients & instances... - $pct%"
+        # Step 2: Minecraft Instances, Versions & Deep Mods Inspection (15% to 35%)
+        $scanProgress.Value = 16
+        $txtProgressStatus.Text = "Deep scanning all Minecraft clients & instances... - 16%"
+        Pump-WpfEvents
+        $instCallback = {
+            param([int]$p, [string]$msg)
+            $scanProgress.Value = $p
+            $txtProgressStatus.Text = "$msg - $p%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 1200
         }
+        try { Scan-LastPlayedInstance -ProgressCallback $instCallback } catch { Write-Host "Instance scan error: $_" }
+        $scanProgress.Value = 35
+        $txtProgressStatus.Text = "Minecraft instances & mods analyzed - 35%"
+        Pump-WpfEvents
 
-        # Step 3: Windows Prefetch & BAM Execution History (35% to 60% - ~30s)
+        # Step 3: Windows Prefetch & BAM Execution History (35% to 60%)
         for ($pct = 36; $pct -le 60; $pct++) {
             $scanProgress.Value = $pct
             $txtProgressStatus.Text = "Scanning Windows Prefetch & BAM kernel timestamps... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 1200
+            Start-Sleep -Milliseconds 30
         }
-        Scan-PrefetchTraces -Hours $HoursPrefetch
-        Scan-BAMRegistry -Hours $HoursBAM
+        try { Scan-PrefetchTraces -Hours $HoursPrefetch } catch { Write-Host "Prefetch scan error: $_" }
+        try { Scan-BAMRegistry -Hours $HoursBAM } catch { Write-Host "BAM scan error: $_" }
         Pump-WpfEvents
 
-        # Step 4: UserAssist & MuiCache Application History (60% to 80% - ~24s)
+        # Step 4: UserAssist & MuiCache Application History (60% to 80%)
         for ($pct = 61; $pct -le 80; $pct++) {
             $scanProgress.Value = $pct
             $txtProgressStatus.Text = "Auditing UserAssist ROT13 & execution traces... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 1200
+            Start-Sleep -Milliseconds 30
         }
-        Scan-UserAssist
+        try { Scan-UserAssist } catch { Write-Host "UserAssist scan error: $_" }
         Pump-WpfEvents
 
-        # Step 5: File System, Temp drops & Anti-Forensics (80% to 95% - ~18s)
+        # Step 5: File System, Temp drops & Anti-Forensics (80% to 95%)
         for ($pct = 81; $pct -le 95; $pct++) {
             $scanProgress.Value = $pct
             $txtProgressStatus.Text = "Auditing file systems, temp drops & anti-forensics... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 1200
+            Start-Sleep -Milliseconds 30
         }
-        Scan-FileSystem -Hours $HoursFiles
-        Scan-USBStorage
+        try { Scan-FileSystem -Hours $HoursFiles } catch { Write-Host "FileSystem scan error: $_" }
+        try { Scan-USBStorage } catch { Write-Host "USBStorage scan error: $_" }
         Pump-WpfEvents
 
-        # Step 6: Finalizing & Compiling Report (95% to 100% - ~6s)
+        # Step 6: Finalizing & Compiling Report (95% to 100%)
         for ($pct = 96; $pct -le 100; $pct++) {
             $scanProgress.Value = $pct
             $txtProgressStatus.Text = "Finalizing forensic report & scorecard... - $pct%"
             Pump-WpfEvents
-            Start-Sleep -Milliseconds 1200
+            Start-Sleep -Milliseconds 30
         }
 
         # Collect all system-level cheat detections (Prefetch, BAM, FileSystem, etc.)
@@ -2515,11 +2866,17 @@ function Show-GrickoGui {
         }
 
         $txtSummaryStats.Text = "$($actualCheats.Count) Cheats Flagged | $($allInst.Count) Clients/Instances Discovered"
-
-        # Show Results View
-        $progressView.Visibility = [System.Windows.Visibility]::Collapsed
-        $resultsView.Visibility = [System.Windows.Visibility]::Visible
-        Pump-WpfEvents
+        } catch {
+            Write-Host "Scan encountered an error: $_" -ForegroundColor Red
+            if ($Global:Findings.Count -eq 0) {
+                Write-Alert -Level "WARN" -Message "Scan encountered an exception: $($_.Exception.Message)"
+            }
+        } finally {
+            # Show Results View
+            $progressView.Visibility = [System.Windows.Visibility]::Collapsed
+            $resultsView.Visibility = [System.Windows.Visibility]::Visible
+            Pump-WpfEvents
+        }
     })
 
     # Export JSON Handler

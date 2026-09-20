@@ -36,6 +36,7 @@ $Global:ReportData = [ordered]@{
     ActiveInstanceMods = @()
     AllInstances       = @()
     ModFiles           = @()
+    DownloadFiles      = @()
     TempFiles          = @()
     AntiForensics      = @()
     USBDevices         = @()
