@@ -1,3 +1,4 @@
+$code = @'
 <#
     Gricko SS Tool - Minimalist Ocean-Style Automated Screenshare GUI
     Compact Floating Window with Fishbone Logo, 2-Minute Deep Scan & Clean Results
@@ -596,3 +597,9 @@ function Show-GrickoGui {
 
     $window.ShowDialog() | Out-Null
 }
+'@
+
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText("src/gui/MainWindow.ps1", $code, $utf8NoBom)
+[System.IO.File]::WriteAllText("ss-tool/src/gui/MainWindow.ps1", $code, $utf8NoBom)
+Write-Host "[OK] MainWindow.ps1 generated in both locations with 100% ASCII."
