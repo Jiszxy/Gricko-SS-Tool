@@ -36,7 +36,8 @@ function Show-GrickoGui {
         Title="Gricko SS Tool" Height="540" Width="580"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
-        ResizeMode="NoResize" FontFamily="Segoe UI, Tahoma, Helvetica, Arial">
+        ResizeMode="NoResize" FontFamily="Segoe UI, Tahoma, Helvetica, Arial"
+        Topmost="True" ShowInTaskbar="True">
 
     <Window.Resources>
         <Style TargetType="ScrollBar">
@@ -413,9 +414,42 @@ function Show-GrickoGui {
     $rootBorder.Add_MouseLeftButtonDown($dragAction)
     $titleBarGrid.Add_MouseLeftButtonDown($dragAction)
 
+    $script:isScanning = $false
+
     # Window Control Actions
-    $btnMin.Add_Click({ $window.WindowState = [System.Windows.WindowState]::Minimized })
-    $btnClose.Add_Click({ $window.Close() })
+    $btnMin.Add_Click({
+        if (-not $script:isScanning) {
+            $window.WindowState = [System.Windows.WindowState]::Minimized
+        }
+    })
+    $btnClose.Add_Click({
+        if (-not $script:isScanning) {
+            $window.Close()
+        }
+    })
+
+    # Screen Lock / Topmost Retention (prevent tabbing out or backgrounding during active scan)
+    $window.Add_StateChanged({
+        if ($window.WindowState -eq [System.Windows.WindowState]::Minimized -and $script:isScanning) {
+            $window.WindowState = [System.Windows.WindowState]::Normal
+            $window.Topmost = $true
+            $window.Activate()
+        }
+    })
+
+    $window.Add_Deactivated({
+        if ($script:isScanning) {
+            $window.Topmost = $true
+            $window.Activate()
+        }
+    })
+
+    $window.Add_Closing({
+        param($sender, $e)
+        if ($script:isScanning) {
+            $e.Cancel = $true
+        }
+    })
 
     # Navigation Actions
     $btnDetails.Add_Click({
@@ -450,6 +484,9 @@ function Show-GrickoGui {
     })
 
     function Pump-WpfEvents {
+        if ($script:isScanning -and $window) {
+            if (-not $window.Topmost) { $window.Topmost = $true }
+        }
         $frame = [System.Windows.Threading.DispatcherFrame]::new()
         [System.Windows.Threading.Dispatcher]::CurrentDispatcher.BeginInvoke(
             [System.Windows.Threading.DispatcherPriority]::Background,
@@ -768,6 +805,11 @@ function Show-GrickoGui {
 
     # Deep Scan Runner
     $btnScan.Add_Click({
+        $script:isScanning = $true
+        $window.Topmost = $true
+        $window.Activate()
+        $btnMin.Opacity = 0.3
+        $btnClose.Opacity = 0.3
         $homeView.Visibility = [System.Windows.Visibility]::Collapsed
         $progressView.Visibility = [System.Windows.Visibility]::Visible
         $detailsContentPanel.Children.Clear()
@@ -970,6 +1012,9 @@ function Show-GrickoGui {
                 Write-Alert -Level "WARN" -Message "Scan encountered an exception: $($_.Exception.Message)"
             }
         } finally {
+            $script:isScanning = $false
+            $btnMin.Opacity = 1.0
+            $btnClose.Opacity = 1.0
             # Show Results View
             $progressView.Visibility = [System.Windows.Visibility]::Collapsed
             $resultsView.Visibility = [System.Windows.Visibility]::Visible
