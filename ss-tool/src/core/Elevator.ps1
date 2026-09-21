@@ -34,7 +34,13 @@ function Assert-Elevation {
                 Write-Alert -Level "WARN" -Message "UAC Elevation was declined or failed." -Detail "Continuing scan in unprivileged mode."
             }
         } else {
-            Write-Alert -Level "WARN" -Message "Script running from memory or stream. Cannot auto-elevate file." -Detail "Run PowerShell as Administrator for full forensic visibility."
+            $onlineCmd = "irm https://raw.githubusercontent.com/Jiszxy/Gricko-SS-Tool/main/dist/gricko-standalone.ps1 | iex"
+            try {
+                Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$onlineCmd`"" -Verb RunAs
+                exit
+            } catch {
+                Write-Alert -Level "WARN" -Message "UAC Elevation was declined or failed." -Detail "Continuing in unprivileged mode."
+            }
         }
     } else {
         Write-Alert -Level "OK" -Message "Administrative elevation confirmed." -Detail "Full access to Prefetch, BAM, and low-level artifacts."
